@@ -31,7 +31,7 @@ DEF_MATERIAL_APPLY(Lambert);
 
 typedef struct Glass {
 	Material base;
-	float3 color;
+	float3 transmittance; // Fraction transmitted through one unit of glass.
 } Glass;
 DEF_MATERIAL_APPLY(Glass);
 
@@ -41,3 +41,23 @@ typedef struct Phong {
 	float pexp;
 } Phong;
 DEF_MATERIAL_APPLY(Phong);
+
+typedef struct Checker {
+	Material base;
+	float3 a, b;
+	float scale;
+} Checker;
+bool CheckerApply(Material const *material, HitRecord *hit, float3 *color);
+
+typedef struct Coated {
+	Material base;
+	float3 color;
+} Coated;
+bool CoatedApply(Material const *material, HitRecord *hit, float3 *color);
+
+typedef struct Marble {
+	Material base;
+	float3 a, b;
+	float scale;
+} Marble;
+bool MarbleApply(Material const *material, HitRecord *hit, float3 *color);

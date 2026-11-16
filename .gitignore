@@ -1,4 +1,5 @@
 .vscode
 .cache
 build
+build-gui
 compile_commands.json

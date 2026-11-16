@@ -2,11 +2,11 @@
 
 #include "upt/ray_core.h"
 
-#define ALLOC_SHAPE(name)                                                                          \
-	({                                                                                         \
-		name *_ptr = xmalloc(sizeof(*_ptr));                                               \
-		_ptr->base.Hit = (void *)name##Hit;                                                \
-		_ptr;                                                                              \
+#define ALLOC_SHAPE(name)                                                                         \
+	({                                                                                       \
+		name *_ptr = xmalloc(sizeof(*_ptr));                                              \
+		_ptr->base = (Shape){.Hit = name##Hit};                                                       \
+		_ptr;                                                                            \
 	})
 
 typedef struct Sphere {
@@ -16,4 +16,50 @@ typedef struct Sphere {
 	float3 o;
 } Sphere;
 
-bool SphereHit(Sphere *this, HitRecord *hit, float tmin, float tmax);
+typedef struct Plane {
+	Shape base;
+	Material *material;
+	float3 normal; // Unit normal; dot(normal, point) = offset.
+	float offset;
+} Plane;
+
+bool SphereHit(Shape *shape, HitRecord *hit, float tmin, float tmax);
+bool PlaneHit(Shape *shape, HitRecord *hit, float tmin, float tmax);
+bool ShapeListHit(Shape *const *shapes, size_t count, HitRecord *hit);
+
+bool SphereBounds(Shape *shape, Aabb *bounds);
+
+static inline bool SphereHitInline(Shape *shape, HitRecord *hit, float tmin, float tmax)
+{
+	Sphere *this = (Sphere *)shape;
+	Ray ray = hit->ray;
+	// Small, distant spheres lose the discriminant to cancellation in float.
+	double x = (double)ray.o.x - this->o.x;
+	double y = (double)ray.o.y - this->o.y;
+	double z = (double)ray.o.z - this->o.z;
+	double dx = ray.d.x, dy = ray.d.y, dz = ray.d.z;
+	double a = dx * dx + dy * dy + dz * dz;
+	double half_b = dx * x + dy * y + dz * z;
+	double c = x * x + y * y + z * z - (double)this->r * this->r;
+	double discr = half_b * half_b - a * c;
+	if (discr < 0.0f)
+		return false;
+	discr = sqrt(discr);
+	double t = (-half_b - discr) / a;
+	if (t < tmin)
+		t = (-half_b + discr) / a;
+	if (t < tmin || t > tmax)
+		return false;
+	hit->t = t;
+	hit->sn = float3_norm(float3_sub(RayAt(ray, hit->t), this->o));
+	hit->material = this->material;
+	return true;
+}
+
+static inline bool ShapeHit(Shape *shape, HitRecord *hit, float near, float far)
+{
+#ifdef UPT_INLINE_SPHERES
+	if (shape->Hit == SphereHit) return SphereHitInline(shape, hit, near, far);
+#endif
+	return shape->Hit(shape, hit, near, far);
+}

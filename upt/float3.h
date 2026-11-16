@@ -21,7 +21,7 @@ static inline float3 float3_frompixel(uint32_t p)
 		uint32_t p;
 	} u;
 	u.p = p;
-	return (float3){u.c[0] / 255.0, u.c[1] / 255.0, u.c[2] / 255.0};
+	return (float3){u.c[0] / 255.0f, u.c[1] / 255.0f, u.c[2] / 255.0f};
 }
 
 static inline uint32_t float3_topixel(float3 v)
@@ -30,9 +30,9 @@ static inline uint32_t float3_topixel(float3 v)
 		uint8_t c[4];
 		uint32_t p;
 	} u;
-	u.c[0] = v.x * 255.0;
-	u.c[1] = v.y * 255.0;
-	u.c[2] = v.z * 255.0;
+	u.c[0] = v.x * 255.0f + 0.5f;
+	u.c[1] = v.y * 255.0f + 0.5f;
+	u.c[2] = v.z * 255.0f + 0.5f;
 	u.c[3] = 255;
 	return u.p;
 }
@@ -72,15 +72,14 @@ static inline float3 float3_norm(float3 v)
 	return float3_scale(v, rsqrtf(float3_dot(v, v)));
 }
 
-static inline float3 float3_clamp(float3 v)
-{
-	v.x = (v.x > 1.0f) ? 1.0f : v.x;
-	v.y = (v.y > 1.0f) ? 1.0f : v.y;
-	v.z = (v.z > 1.0f) ? 1.0f : v.z;
-	return v;
-}
-
 static inline float3 float3_refl(float3 v, float3 n)
 {
 	return float3_sub(v, float3_scale(n, 2.0f * float3_dot(n, v)));
+}
+
+static inline void float3_basis(float3 n, float3 *u, float3 *v)
+{
+	float3 axis = fabsf(n.z) < 0.999f ? (float3){0, 0, 1} : (float3){0, 1, 0};
+	*u = float3_norm(float3_cross(n, axis));
+	*v = float3_cross(*u, n);
 }

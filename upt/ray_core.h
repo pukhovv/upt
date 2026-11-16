@@ -21,6 +21,17 @@ static inline float3 RayAt(Ray const r, float t)
 	return float3_add(r.o, float3_scale(r.d, t));
 }
 
+static inline Ray RaySpawn(float3 point, float3 normal, float3 direction)
+{
+	float side = float3_dot(normal, direction) >= 0 ? 1 : -1;
+	float3 offset = float3_scale(normal, side * 0.0001f);
+	float3 origin = float3_add(point, offset);
+	if (offset.x) origin.x = nextafterf(origin.x, offset.x > 0 ? INFINITY : -INFINITY);
+	if (offset.y) origin.y = nextafterf(origin.y, offset.y > 0 ? INFINITY : -INFINITY);
+	if (offset.z) origin.z = nextafterf(origin.z, offset.z > 0 ? INFINITY : -INFINITY);
+	return (Ray){.o = origin, .d = direction};
+}
+
 struct HitRecord {
 	Ray ray;
 	float3 sn;
@@ -32,8 +43,14 @@ struct Material {
 	bool (*Apply)(Material const *mat, HitRecord *hit, Color *color);
 };
 
+typedef struct Aabb {
+	float corners[2][3];
+} Aabb;
+
 struct Shape {
 	bool (*Hit)(Shape *shape, HitRecord *hit, float tmin, float tmax);
+	// NULL or false leaves the shape outside the finite hierarchy.
+	bool (*Bounds)(Shape *shape, Aabb *bounds);
 };
 
 struct Camera {

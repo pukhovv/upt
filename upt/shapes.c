@@ -1,23 +1,51 @@
 #include "upt/shapes.h"
+#include <float.h>
 
-bool SphereHit(Sphere *this, HitRecord *hit, float tmin, float tmax)
+bool SphereHit(Shape *shape, HitRecord *hit, float near, float far)
 {
-	Ray ray = hit->ray;
-	float3 tmp = float3_sub(ray.o, this->o);
-	float a = float3_dot(ray.d, ray.d);
-	float b = 2.0f * float3_dot(ray.d, tmp);
-	float c = float3_dot(tmp, tmp) - this->r * this->r;
-	float discr = b * b - 4.0f * a * c;
-	if (discr < 0.0f)
+	return SphereHitInline(shape, hit, near, far);
+}
+
+bool PlaneHit(Shape *shape, HitRecord *hit, float tmin, float tmax)
+{
+	Plane *plane = (Plane *)shape;
+	float denominator = float3_dot(plane->normal, hit->ray.d);
+	if (denominator == 0.0f)
 		return false;
-	discr = sqrt(discr);
-	float t = (-b - discr) / (2.0f * a);
-	if (t < tmin)
-		t = (-b + discr) / (2.0f * a);
+	float t = (plane->offset - float3_dot(plane->normal, hit->ray.o)) / denominator;
 	if (t < tmin || t > tmax)
 		return false;
 	hit->t = t;
-	hit->sn = float3_norm(float3_sub(RayAt(ray, t), this->o));
-	hit->material = this->material;
+	hit->sn = plane->normal;
+	hit->material = plane->material;
+	return true;
+}
+
+bool ShapeListHit(Shape *const *shapes, size_t count, HitRecord *hit)
+{
+	float tmax = FLT_MAX;
+	HitRecord cur_hit = *hit;
+	bool was_hit = false;
+	for (size_t i = 0; i < count; ++i) {
+		if (!ShapeHit(shapes[i], &cur_hit, 0.0001f, tmax))
+			continue;
+		if (cur_hit.t < tmax) {
+			*hit = cur_hit;
+			tmax = cur_hit.t;
+			was_hit = true;
+		}
+	}
+	return was_hit;
+}
+
+bool SphereBounds(Shape *shape, Aabb *bounds)
+{
+	Sphere *sphere = (Sphere *)shape;
+	float c[3] = {sphere->o.x, sphere->o.y, sphere->o.z};
+	float radius = fabsf(sphere->r);
+	for (int axis = 0; axis < 3; ++axis) {
+		bounds->corners[0][axis] = nextafterf(c[axis] - radius, -INFINITY);
+		bounds->corners[1][axis] = nextafterf(c[axis] + radius, INFINITY);
+	}
 	return true;
 }
