@@ -9,6 +9,8 @@ typedef struct Sampler {
 } Sampler;
 extern _Thread_local Sampler upt_sampler __attribute__((tls_model("local-exec")));
 
+double MonotonicSeconds(void);
+
 static inline uint32_t sample_hash(uint32_t x)
 {
 	x ^= x >> 16;

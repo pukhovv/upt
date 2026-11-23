@@ -2,11 +2,16 @@
 
 #include "upt/ray_core.h"
 
-double Render(Scene *scene, uint32_t *pixels, unsigned width, unsigned height,
-	      unsigned long long frames, unsigned warmup, unsigned threads,
-	      bool (*present)(uint32_t const *, unsigned, unsigned long long));
+typedef struct RenderStats {
+	double seconds;
+	unsigned long long frames, samples;
+} RenderStats;
+
+RenderStats Render(Scene *scene, uint32_t *pixels, unsigned width, unsigned height,
+		   unsigned long long frames, unsigned warmup, unsigned threads, double deadline,
+		   bool (*present)(uint32_t const *, unsigned, unsigned long long));
 int RenderHeadless(Scene *scene, unsigned width, unsigned height, unsigned long long frames,
-		   unsigned warmup, unsigned threads, char const *output);
+		   unsigned warmup, unsigned threads, double deadline, char const *output);
 #ifdef UPT_WITH_GUI
 int RenderGui(Scene *scene, unsigned threads);
 #endif

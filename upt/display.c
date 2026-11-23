@@ -10,7 +10,7 @@ static void render_gui(void *context, unsigned width, unsigned height)
 {
 	GuiRender *task = context;
 	uint32_t *pixels = xcalloc((size_t)width * height, sizeof(*pixels));
-	Render(task->scene, pixels, width, height, 0, 0, task->threads, uvideomem_present);
+	Render(task->scene, pixels, width, height, 0, 0, task->threads, 0, uvideomem_present);
 	free(pixels);
 }
 

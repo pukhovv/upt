@@ -4,17 +4,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-
-static double monotonic_seconds(void)
-{
-	struct timespec now;
-	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-		perror("clock_gettime");
-		exit(EXIT_FAILURE);
-	}
-	return now.tv_sec + now.tv_nsec / 1e9;
-}
 
 static inline float display_channel(float radiance)
 {
@@ -37,6 +26,8 @@ typedef struct RenderTask {
 	float3 *mean;
 	unsigned width, height;
 	unsigned long long frame;
+	double deadline;
+	unsigned long long *samples;
 	bool (*present)(uint32_t const *, unsigned, unsigned long long);
 } RenderTask;
 
@@ -50,7 +41,10 @@ static bool render_row(void *context, unsigned y)
 	unsigned long long frame = task->frame;
 	int const nsamples = 8;
 	float weight = 1.0f / (float)(frame + 1);
-	for (unsigned int x = 0; x < width; ++x) {
+	unsigned x = 0;
+	for (; x < width; ++x) {
+		if (task->deadline && !(x & 15) && MonotonicSeconds() >= task->deadline)
+			break;
 		float3 rayclr = {0};
 		for (int i = 0; i < nsamples; ++i) {
 			SampleBegin((uint32_t)((size_t)y * width + x), frame, i);
@@ -66,13 +60,16 @@ static bool render_row(void *context, unsigned y)
 		    float3_add(mean[pixel], float3_scale(float3_sub(rayclr, mean[pixel]), weight));
 		vmem[pixel] = display_pixel(mean[pixel]);
 	}
-	return !task->present || task->present(vmem + (size_t)y * width, y, frame);
+	if (task->samples)
+		task->samples[y] += (unsigned long long)x * nsamples;
+	return x == width && (!task->present || task->present(vmem + (size_t)y * width, y, frame));
 }
 
-__attribute__((noinline)) double
-Render(Scene *scene, uint32_t *vmem, unsigned width, unsigned height, unsigned long long nframes,
-       unsigned warmup, unsigned threads,
-       bool (*present)(uint32_t const *, unsigned, unsigned long long))
+__attribute__((noinline)) RenderStats Render(Scene *scene, uint32_t *vmem, unsigned width,
+					     unsigned height, unsigned long long nframes,
+					     unsigned warmup, unsigned threads, double deadline,
+					     bool (*present)(uint32_t const *, unsigned,
+							     unsigned long long))
 {
 	float ratio = (float)width / height;
 	scene->camera.axis_x = float3_scale(scene->camera.axis_x, ratio / scene->camera.ratio);
@@ -85,20 +82,31 @@ Render(Scene *scene, uint32_t *vmem, unsigned width, unsigned height, unsigned l
 			   .mean = mean,
 			   .width = width,
 			   .height = height,
+			   .deadline = deadline,
+			   .samples = deadline ? xcalloc(height, sizeof(*task.samples)) : NULL,
 			   .present = present};
 	Workers *workers = WorkersInit(threads, height);
-	double start = 0;
+	double start = MonotonicSeconds();
+	unsigned long long completed = 0;
 	for (unsigned long long frame = 0; !nframes || frame < nframes + warmup; ++frame) {
 		if (frame == warmup)
-			start = monotonic_seconds();
+			start = MonotonicSeconds();
 		task.frame = frame;
 		if (!WorkersRun(workers, height, render_row, &task))
 			break;
+		++completed;
 	}
-	double elapsed = monotonic_seconds() - start;
+	RenderStats stats = {.seconds = MonotonicSeconds() - start,
+			     .frames = completed > warmup ? completed - warmup : 0};
+	if (task.samples) {
+		for (unsigned y = 0; y < height; ++y)
+			stats.samples += task.samples[y];
+	} else
+		stats.samples = completed * (unsigned long long)width * height * 8;
 	WorkersFree(workers);
+	free(task.samples);
 	free(mean);
-	return elapsed;
+	return stats;
 }
 
 static bool write_image(char const *path, uint32_t const *pixels, unsigned width, unsigned height)
@@ -123,10 +131,11 @@ static bool write_image(char const *path, uint32_t const *pixels, unsigned width
 }
 
 int RenderHeadless(Scene *scene, unsigned width, unsigned height, unsigned long long frames,
-		   unsigned warmup, unsigned threads, char const *output)
+		   unsigned warmup, unsigned threads, double deadline, char const *output)
 {
 	uint32_t *pixels = xcalloc((size_t)width * height, sizeof(*pixels));
-	double elapsed = Render(scene, pixels, width, height, frames, warmup, threads, NULL);
+	RenderStats stats =
+	    Render(scene, pixels, width, height, frames, warmup, threads, deadline, NULL);
 	int result = EXIT_FAILURE;
 	if (output && !write_image(output, pixels, width, height))
 		goto done;
@@ -134,8 +143,11 @@ int RenderHeadless(Scene *scene, unsigned width, unsigned height, unsigned long 
 	unsigned char const *bytes = (unsigned char const *)pixels;
 	for (size_t i = 0; i < (size_t)width * height * sizeof(*pixels); ++i)
 		checksum = (checksum ^ bytes[i]) * 16777619u;
-	printf("Rendered %llu frames in %.6f seconds (%.3f FPS), checksum %08" PRIx32 "\n", frames,
-	       elapsed, elapsed > 0.0 ? frames / elapsed : 0.0, checksum);
+	printf("Rendered %llu frames in %.6f seconds (%.3f FPS), checksum %08" PRIx32 "\n",
+	       stats.frames, stats.seconds, stats.seconds > 0 ? stats.frames / stats.seconds : 0,
+	       checksum);
+	printf("Computed %llu primary samples (%.6f samples/pixel).\n", stats.samples,
+	       stats.samples / ((double)width * height));
 	result = EXIT_SUCCESS;
 done:
 	free(pixels);
