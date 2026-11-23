@@ -1,12 +1,12 @@
-#include "upt/scenes.h"
 #include "upt/bvh.h"
+#include "upt/scenes/builtin.h"
+#include "upt/shapes.h"
 #include "upt/surfaces.h"
 #include "uvideomem/uvideomem.h"
 
 static Sphere *sphere(float3 center, float radius, Material *material)
 {
 	Sphere *s = ALLOC_SHAPE(Sphere);
-	s->base.Bounds = SphereBounds;
 	s->o = center;
 	s->r = radius;
 	s->material = material;
@@ -42,6 +42,7 @@ Scene SceneAtelier_init(void)
 	Mirror *silver = ALLOC_MATERIAL(Mirror);
 	silver->color = (float3){0.95f, 0.97f, 0.99f};
 	Glass *glass = ALLOC_MATERIAL(Glass);
+	glass->ior = 1.5f;
 	glass->transmittance = (float3){0.96f, 0.99f, 1.0f};
 	Lamp *warm = ALLOC_MATERIAL(Lamp);
 	warm->color = (float3){1.5f, 1.17f, 0.60f};
@@ -76,6 +77,7 @@ Scene SceneAtelier_init(void)
 	rose->b = (float3){0.95f, 0.80f, 0.60f};
 	rose->scale = 5;
 	Glass *amber = ALLOC_MATERIAL(Glass);
+	amber->ior = 1.5f;
 	amber->transmittance = (float3){0.99f, 0.80f, 0.42f};
 
 	enum { ARC = 72, ORBIT = 128, COUNT = ARC + ORBIT + 51 };
@@ -102,7 +104,7 @@ Scene SceneAtelier_init(void)
 	shapes[n++] = standing((Material *)rose, 0.1f, 5.2f, 0.65f);
 
 	Material *satellites[] = {(Material *)porcelain, (Material *)jade, (Material *)amber,
-				 (Material *)stone, (Material *)gold, (Material *)wine};
+				  (Material *)stone,	 (Material *)gold, (Material *)wine};
 	for (int group = 0; group < 2; ++group) {
 		float x = group ? 4.0f : -5.0f;
 		float z = group ? 11.0f : 10.0f;
@@ -111,8 +113,8 @@ Scene SceneAtelier_init(void)
 			float t = 2.0f * M_PI * (i + 0.17f * group) / 12;
 			float r = 0.26f + 0.045f * ((i * 5 + group) % 8);
 			float distance = 2 * sqrtf(radius * r) + 0.2f;
-			shapes[n++] = standing(satellites[(i + group) % 6],
-					       x + distance * cosf(t), z + distance * sinf(t), r);
+			shapes[n++] = standing(satellites[(i + group) % 6], x + distance * cosf(t),
+					       z + distance * sinf(t), r);
 		}
 	}
 
@@ -120,20 +122,23 @@ Scene SceneAtelier_init(void)
 	for (int i = 0; i < ARC; ++i) {
 		float t = 3.29f + 2.69f * i / (ARC - 1);
 		float r = 0.13f + 0.045f * (1.0f + sinf(2 * t));
-		Material *m = i % 12 == 0 ? (Material *)warm :
-			      i % 4 == 0 ? (Material *)gold :
-			      i % 3 == 0 ? (Material *)jade : (Material *)porcelain;
+		Material *m = i % 12 == 0  ? (Material *)warm
+			      : i % 4 == 0 ? (Material *)gold
+			      : i % 3 == 0 ? (Material *)jade
+					   : (Material *)porcelain;
 		shapes[n++] = standing(m, 11 * cosf(t), 7 + 9 * sinf(t), r);
 	}
 	// This tilted orbit crosses the reflective and refractive silhouettes.
 	for (int i = 0; i < ORBIT; ++i) {
 		float t = 2.0f * M_PI * i / ORBIT;
 		float r = 0.14f + 0.025f * cosf(3 * t);
-		Material *m = i % 16 == 0 ? (Material *)cyan :
-			      i % 8 == 0 ? (Material *)porcelain :
-			      i % 4 == 0 ? (Material *)red : (Material *)copper;
-		shapes[n++] = &sphere((float3){9 * cosf(t), 4.6f + 3.8f * sinf(t),
-					    9 + 2.5f * sinf(t)}, r, m)->base;
+		Material *m = i % 16 == 0  ? (Material *)cyan
+			      : i % 8 == 0 ? (Material *)porcelain
+			      : i % 4 == 0 ? (Material *)red
+					   : (Material *)copper;
+		shapes[n++] =
+		    &sphere((float3){9 * cosf(t), 4.6f + 3.8f * sinf(t), 9 + 2.5f * sinf(t)}, r, m)
+			 ->base;
 	}
 
 	Material *gloss[] = {(Material *)rough, (Material *)petrol, (Material *)polished};
@@ -155,8 +160,7 @@ Scene SceneAtelier_init(void)
 	root[0] = BvhBuild(shapes, n);
 	Camera camera;
 	CameraSetScreen(&camera, 0.72f, (float)UVIDEOMEM_W / UVIDEOMEM_H);
-	CameraLookAt(&camera, (float3){10, 14, -15}, (float3){0, 1.6f, 7},
-		     (float3){0, -1, 0});
-	return (Scene){.shapes = root, .nshapes = 1, .camera = camera,
-		       .sky_color = {0.72f, 0.78f, 0.96f}};
+	CameraLookAt(&camera, (float3){10, 14, -15}, (float3){0, 1.6f, 7}, (float3){0, -1, 0});
+	return (Scene){
+	    .shapes = root, .nshapes = 1, .camera = camera, .sky_color = {0.72f, 0.78f, 0.96f}};
 }

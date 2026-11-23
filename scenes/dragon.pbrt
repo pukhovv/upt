@@ -1,0 +1,34 @@
+# Stanford dragon: north/front view, jade coating on a dark bronze plinth.
+LookAt 0 .17 -.48  0 .092 0  0 1 0
+Camera "perspective" "float fov" 38
+WorldBegin
+LightSource "infinite" "rgb L" [.2 .24 .3] "string filename" "studio.ppm"
+Material "coateddiffuse" "rgb reflectance" [.025 .22 .13]
+AttributeBegin
+Translate 0 -.0277295 0
+Shape "plymesh" "string filename" "assets/dragon.ply"
+AttributeEnd
+ObjectBegin "plinth"
+Material "conductor" "rgb reflectance" [.2 .14 .065] "float roughness" 0.28
+Shape "plymesh" "string filename" "plinth.ply"
+ObjectEnd
+AttributeBegin
+Scale 0.153 0.025 0.12
+ObjectInstance "plinth"
+AttributeEnd
+Material "conductor" "rgb reflectance" [.12 .15 .18] "float roughness" .3
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-4 0 -4 -4 0 4 4 0 4 4 0 -4]
+Material "diffuse" "rgb reflectance" [.035 .045 .06]
+Shape "plymesh" "string filename" "backdrop.ply"
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [9 8.7 7.4]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-0.4190766 0.2297194 -0.2018884 -0.2794339 0.2297194 -0.3718881 -0.1409234 0.4702806 -0.2581116 -0.2805661 0.4702806 -0.08811186]
+AttributeEnd
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [6 8 10]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [0.3737035 0.1512112 0.08944076 0.322494 0.1512112 0.2089296 0.1862965 0.3887888 0.1505592 0.237506 0.3887888 0.03107039]
+AttributeEnd
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [3 3.5 4]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [0.16 0.5456392 0.1399207 -0.16 0.5456392 0.1399207 -0.16 0.5543608 -0.09992074 0.16 0.5543608 -0.09992074]
+AttributeEnd

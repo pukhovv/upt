@@ -1,0 +1,263 @@
+# Underwater landscape built around Microsoft's canonical Khronos BarramundiFish.
+# Camera and lights are inside the homogeneous water; no visible air-water interface.
+LookAt .25 1.35 -3.3  0 1.2 4  0 1 0
+Camera "perspective" "float fov" 55 "float shutterclose" 1
+WorldBegin
+Volume "homogeneous" "point3 p0" [-35 -4 -12] "point3 p1" [35 9 60] "rgb sigma_a" [.03 .007 .003] "float sigma_s" .025 "float g" .8
+LightSource "infinite" "rgb L" [.12 .27 .4]
+Texture "fish" "spectrum" "imagemap" "string filename" "assets/fish.ppm"
+Texture "fish_tint" "spectrum" "scale" "texture tex1" "fish" "rgb tex2" [.95 .98 1]
+Texture "sand" "spectrum" "imagemap" "string filename" "assets/coast_sand_01.ppm"
+Texture "rock" "spectrum" "imagemap" "string filename" "assets/rocky_terrain.ppm"
+Texture "kelp" "spectrum" "noise" "rgb tex1" [.035 .075 .012] "rgb tex2" [.18 .24 .035] "float scale" 4
+Material "diffuse" "texture reflectance" "sand"
+Shape "plymesh" "string filename" "assets/seabed.ply"
+ObjectBegin "fish"
+Material "coateddiffuse" "texture reflectance" "fish_tint"
+Shape "plymesh" "string filename" "assets/fish.ply"
+ObjectEnd
+ObjectBegin "rock"
+Material "diffuse" "texture reflectance" "rock"
+Shape "plymesh" "string filename" "assets/reef-rock.ply"
+ObjectEnd
+ObjectBegin "kelp"
+Material "diffuse" "texture reflectance" "kelp"
+Shape "plymesh" "string filename" "assets/kelp.ply"
+ObjectEnd
+AttributeBegin
+Translate -0.25 0.7 -0.5
+Motion "rigid" "vector3 translation" [.18 .02 0] "vector3 axis" [0 1 0] "float angle" 8
+Rotate 95 0 1 0
+Scale 2.5 2.5 2.5
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 1.05 1.35 1.4
+Motion "rigid" "vector3 translation" [-.12 0 .03] "float angle" -5
+Rotate 240 0 1 0
+Scale 1.35 1.35 1.35
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 0.1 1.85 3.2
+Motion "rigid" "vector3 translation" [.08 0 .02] "float angle" 4
+Rotate 110 0 1 0
+Scale 0.9 0.9 0.9
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -2.2 1.2 5
+Rotate 105 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -1.13633 1.37403 5.25244
+Rotate 115.098 0 1 0
+Scale 0.54 0.54 0.54
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -0.536224 1.49839 5.27279
+Rotate 115.912 0 1 0
+Scale 0.6 0.6 0.6
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 0.449705 1.001 5.04234
+Rotate 106.693 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 1.57808 1.25464 4.77296
+Rotate 95.9184 0 1 0
+Scale 0.54 0.54 0.54
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -2.29792 1.56837 6.11232
+Rotate 93.4929 0 1 0
+Scale 0.6 0.6 0.6
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -1.39658 1.19602 6.31618
+Rotate 101.647 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -0.221691 1.39539 6.5971
+Rotate 112.884 0 1 0
+Scale 0.54 0.54 0.54
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 0.448177 1.52545 6.69681
+Rotate 116.872 0 1 0
+Scale 0.6 0.6 0.6
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 1.26482 1.00889 6.52364
+Rotate 109.945 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -2.03567 1.23609 7.63679
+Rotate 98.4717 0 1 0
+Scale 0.54 0.54 0.54
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -1.30159 1.54044 7.5
+Rotate 93.0001 0 1 0
+Scale 0.6 0.6 0.6
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -0.563004 1.18439 7.63903
+Rotate 98.5611 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 0.637261 1.41074 7.92605
+Rotate 110.042 0 1 0
+Scale 0.54 0.54 0.54
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate 1.44876 1.55367 8.09718
+Rotate 116.887 0 1 0
+Scale 0.6 0.6 0.6
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -2.37785 1.02403 9.39509
+Rotate 112.803 0 1 0
+Scale 0.48 0.48 0.48
+ObjectInstance "fish"
+AttributeEnd
+AttributeBegin
+Translate -2.6 -0.1 0.8
+Rotate 15 0 1 0
+Scale 1.4 0.8 1.1
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate 2.5 -0.05 1.8
+Rotate 35 0 1 0
+Scale 1.1 0.65 0.9
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate -1.8 -0.1 5
+Rotate -20 0 1 0
+Scale 1.7 1 1.2
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate 3.4 -0.15 6
+Rotate 40 0 1 0
+Scale 1.8 0.9 1.5
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate -4 -0.1 10
+Rotate 10 0 1 0
+Scale 2.1 1.4 1.4
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate 1.4 -0.15 10
+Rotate 10 0 1 0
+Scale 1.5 0.7 1
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate -3.1 -0.2 -1
+Rotate 45 0 1 0
+Scale 0.9 0.45 0.7
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate 3 -0.2 -0.5
+Rotate 60 0 1 0
+Scale 1.2 0.6 0.9
+ObjectInstance "rock"
+AttributeEnd
+AttributeBegin
+Translate -2.6 -0.27 0
+Rotate 0 0 1 0
+Scale 0.8 0.8 0.8
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate 2.7 -0.27 0.8
+Rotate 37 0 1 0
+Scale 1.1 1.1 1.1
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate -1.7 -0.27 4
+Rotate 74 0 1 0
+Scale 1.4 1.4 1.4
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate 2.9 -0.27 4
+Rotate 111 0 1 0
+Scale 0.8 0.8 0.8
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate -3.6 -0.27 6
+Rotate 148 0 1 0
+Scale 1.1 1.1 1.1
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate 4 -0.27 8
+Rotate 185 0 1 0
+Scale 1.4 1.4 1.4
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate -2.5 -0.27 9
+Rotate 222 0 1 0
+Scale 0.8 0.8 0.8
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate 1.8 -0.27 9
+Rotate 259 0 1 0
+Scale 1.1 1.1 1.1
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate -0.5 -0.27 11
+Rotate 296 0 1 0
+Scale 1.4 1.4 1.4
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+Translate 3 -0.27 12
+Rotate 333 0 1 0
+Scale 0.8 0.8 0.8
+ObjectInstance "kelp"
+AttributeEnd
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [28 32 30]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-3.455885 7.158692 -3.545528 -1.052075 7.158692 -4.232331 -0.5441153 8.841308 -2.454472 -2.947925 8.841308 -1.767669]
+AttributeEnd
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [2 3 4]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-9.561738 8.75061 8 -9.561738 8.75061 2 -6.438262 11.24939 2 -6.438262 11.24939 8]
+AttributeEnd
+AttributeBegin
+AreaLightSource "diffuse" "rgb L" [5 6 7]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-2.424824 2.433672 -6.026899 3.554451 2.433672 -5.528627 3.424824 5.566328 -3.973101 -2.554451 5.566328 -4.471373]
+AttributeEnd

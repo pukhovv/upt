@@ -12,14 +12,15 @@
 #include <cstring>
 #include <vector>
 
-#include "uvideomem.h"
 #include "upt/float3.h"
+#include "uvideomem.h"
 #include <stddef.h>
 
-namespace {
+namespace
+{
 // Display-only bilateral filter; the linear radiance average remains untouched.
-static inline void denoise_row(uint32_t const *pixels, unsigned int width,
-			       unsigned int height, unsigned int y, uint32_t *output)
+static inline void denoise_row(uint32_t const *pixels, unsigned int width, unsigned int height,
+			       unsigned int y, uint32_t *output)
 {
 	for (unsigned int x = 0; x < width; ++x) {
 		float3 center = float3_frompixel(pixels[(size_t)y * width + x]);
@@ -27,10 +28,14 @@ static inline void denoise_row(uint32_t const *pixels, unsigned int width,
 		float total = 0;
 		for (int dy = -1; dy <= 1; ++dy) {
 			int iy = (int)y + dy;
-			unsigned int sy = iy < 0 ? 0 : iy >= (int)height ? height - 1 : (unsigned int)iy;
+			unsigned int sy = iy < 0	      ? 0
+					  : iy >= (int)height ? height - 1
+							      : (unsigned int)iy;
 			for (int dx = -1; dx <= 1; ++dx) {
 				int ix = (int)x + dx;
-				unsigned int sx = ix < 0 ? 0 : ix >= (int)width ? width - 1 : (unsigned int)ix;
+				unsigned int sx = ix < 0	     ? 0
+						  : ix >= (int)width ? width - 1
+								     : (unsigned int)ix;
 				float3 c = float3_frompixel(pixels[(size_t)sy * width + sx]);
 				float3 delta = float3_sub(c, center);
 				float spatial = (dx == 0 ? 2 : 1) * (dy == 0 ? 2 : 1);
@@ -59,25 +64,27 @@ Video *video;
 void filter_row(unsigned int y)
 {
 	denoise_row(reinterpret_cast<uint32_t const *>(video->image.constBits()),
-		video->image.width(), video->image.height(), y, video->filtered_row.data());
+		    video->image.width(), video->image.height(), y, video->filtered_row.data());
 	QMutexLocker lock(&video->mutex);
 	std::memcpy(video->filtered.scanLine(y), video->filtered_row.data(),
-		video->image.width() * sizeof(uint32_t));
+		    video->image.width() * sizeof(uint32_t));
 }
-}
+} // namespace
 
-extern "C" bool uvideomem_present(uint32_t const *row, unsigned int y,
-				 unsigned long long frame)
+extern "C" bool uvideomem_present(uint32_t const *row, unsigned int y, unsigned long long frame)
 {
-	if (video->stopped.load()) return false;
+	if (video->stopped.load())
+		return false;
 	{
 		QMutexLocker lock(&video->mutex);
 		std::memcpy(video->image.scanLine(y), row, video->image.width() * sizeof(*row));
 		video->row = y;
 		video->frame = frame;
 	}
-	if (y > 0) filter_row(y - 1);
-	if (y + 1 == (unsigned int)video->image.height()) filter_row(y);
+	if (y > 0)
+		filter_row(y - 1);
+	if (y + 1 == (unsigned int)video->image.height())
+		filter_row(y);
 	{
 		QMutexLocker lock(&video->mutex);
 		video->dirty = true;
@@ -135,15 +142,20 @@ extern "C" int uvideomem_init(void (*render)(void *, unsigned int, unsigned int)
 		unsigned long long frame;
 		{
 			QMutexLocker lock(&state.mutex);
-			if (!state.dirty) return;
+			if (!state.dirty)
+				return;
 			snapshot = (state.denoise ? state.filtered : state.image).copy();
 			row = state.row;
 			frame = state.frame;
 			state.dirty = false;
 		}
 		window.setPixmap(QPixmap::fromImage(snapshot));
-		status.setText(QString("%1 × %2  |  Pass %3: %4%  |  %5 completed samples/pixel  |  Denoise %6 (D)  |  Esc to close")
-			.arg(pixels.width()).arg(pixels.height()).arg(frame + 1)
+		status.setText(
+		    QString("%1 × %2  |  Pass %3: %4%  |  %5 completed samples/pixel  |  Denoise "
+			    "%6 (D)  |  Esc to close")
+			.arg(pixels.width())
+			.arg(pixels.height())
+			.arg(frame + 1)
 			.arg(100 * (row + 1) / pixels.height())
 			.arg(frame * 8 + (row + 1 == (unsigned int)pixels.height() ? 8 : 0))
 			.arg(state.denoise ? "on" : "off"));

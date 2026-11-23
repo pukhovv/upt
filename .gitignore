@@ -3,3 +3,5 @@
 build
 build-gui
 compile_commands.json
+scenes/assets/
+__pycache__/
