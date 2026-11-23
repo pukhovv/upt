@@ -11,7 +11,7 @@
 
 typedef struct Options {
 	bool gui;
-	unsigned width, height, warmup;
+	unsigned width, height, warmup, threads;
 	unsigned long long frames;
 	char const *scene, *output;
 } Options;
@@ -19,29 +19,46 @@ typedef struct Options {
 static bool read_options(int argc, char **argv, Options *options)
 {
 	char const *program = argv[0];
-	*options = (Options){.width = UVIDEOMEM_W, .height = UVIDEOMEM_H, .scene = "original"};
-	if (argc > 3 && !strcmp(argv[1], "--warmup")) {
+	*options = (Options){
+	    .width = UVIDEOMEM_W, .height = UVIDEOMEM_H, .threads = 1, .scene = "original"};
+	while (argc > 1 && !strncmp(argv[1], "--", 2)) {
+		if (!strcmp(argv[1], "--gui")) {
+			options->gui = true;
+			--argc;
+			++argv;
+			continue;
+		}
+		bool threads = !strcmp(argv[1], "--threads");
+		if (argc < 3 || (!threads && strcmp(argv[1], "--warmup")))
+			goto usage;
 		char *end;
 		errno = 0;
 		unsigned long n = strtoul(argv[2], &end, 10);
-		if (errno || !argv[2][0] || *end || n > 100000 || argv[2][0] == '-')
+		if (errno || !argv[2][0] || *end || n > (threads ? 1024 : 100000) ||
+		    argv[2][0] == '-')
 			goto usage;
-		options->warmup = n;
+		if (threads)
+			options->threads = n;
+		else
+			options->warmup = n;
 		argc -= 2;
 		argv += 2;
 	}
-	options->gui = argc > 1 && !strcmp(argv[1], "--gui");
 #ifdef UPT_WITH_GUI
 	if (argc == 1)
 		options->gui = true;
 #endif
-	if ((argc < 2 && !(argc == 1 && options->gui)) || argc > 6 || argc == 4 ||
-	    (options->gui && argc > 3))
+	if (options->gui) {
+		if (argc > 2)
+			goto usage;
+		if (argc == 2)
+			options->scene = argv[1];
+		return true;
+	}
+	if (argc < 2 || argc > 6 || argc == 4)
 		goto usage;
 	if (argc >= 3)
 		options->scene = argv[2];
-	if (options->gui)
-		return true;
 	char *end;
 	errno = 0;
 	options->frames = strtoull(argv[1], &end, 10);
@@ -64,11 +81,12 @@ static bool read_options(int argc, char **argv, Options *options)
 		options->output = argv[5];
 	return true;
 usage:
-	fprintf(
-	    stderr,
-	    "Usage: %s [--warmup N] N [scene.pbrt|original|atelier [width height [image.ppm]]]\n"
-	    "       %s --gui [scene.pbrt|original|atelier]\n",
-	    program, program);
+	fprintf(stderr,
+		"Usage: %s [--threads N] [--warmup N] N [scene.pbrt|original|atelier [width height "
+		"[image.ppm]]]\n"
+		"       %s [--threads N] --gui [scene.pbrt|original|atelier]\n"
+		"Threads: 0 uses all online CPUs; the default is 1.\n",
+		program, program);
 	return false;
 }
 
@@ -90,11 +108,11 @@ int main(int argc, char **argv)
 	int result;
 #ifdef UPT_WITH_GUI
 	if (options.gui)
-		result = RenderGui(&scene);
+		result = RenderGui(&scene, options.threads);
 	else
 #endif
 		result = RenderHeadless(&scene, options.width, options.height, options.frames,
-					options.warmup, options.output);
+					options.warmup, options.threads, options.output);
 	SceneFree(&scene);
 	return result;
 }

@@ -16,6 +16,13 @@ CMake enables `-O3`, `-march=native`, and Clang full LTO by default. To use LLD,
 add `-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld` to the configure command.
 The optional GUI build requires Qt 5 Widgets and `-DUPT_WITH_GUI=ON`.
 
+Rendering uses one thread by default. Pass `--threads N` before the frame count
+to select a worker count; `--threads 0` uses all online CPUs. For the GUI:
+
+```sh
+build/upt/upt --threads 0 --gui scenes/glass.pbrt
+```
+
 Download the assets and run all six benchmarks from the repository root:
 
 ```sh
