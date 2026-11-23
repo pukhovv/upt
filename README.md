@@ -14,7 +14,7 @@ cmake --build build -j
 
 CMake enables `-O3`, `-march=native`, and Clang full LTO by default. To use LLD,
 add `-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld` to the configure command.
-The optional GUI build requires Qt 5 Widgets and `-DUPT_WITH_GUI=ON`.
+The optional GUI build requires Qt 6 Widgets and `-DUPT_WITH_GUI=ON`.
 
 Rendering uses one thread by default. Pass `--threads N` before the frame count
 to select a worker count; `--threads 0` uses all online CPUs. For the GUI:
