@@ -1,0 +1,131 @@
+# Imperial Crown by Martin Lubich; PBRT-v4 geometry and RGB material adaptation.
+# Fetch assets with: python3 scenes/fetch.py crown
+LookAt 0 5.5 24  0 9 -10  0 1 0
+Camera "perspective" "float fov" 56
+WorldBegin
+Scale -1 1 1
+Texture "arc_rosetta_red-kd-img" "spectrum" "imagemap" "string filename" "assets/crown/texture-arc_rosetta_red-kd-img.ppm"
+Texture "arc_rosetta_red-kd" "spectrum" "scale" "texture tex1" "arc_rosetta_red-kd-img" "float tex2" 0.620968
+Texture "bl_clamp_a-mask" "spectrum" "imagemap" "string filename" "assets/crown/texture-bl_clamp_a-mask.ppm"
+Texture "border_bott_inlay-mask" "spectrum" "imagemap" "string filename" "assets/crown/texture-border_bott_inlay-mask.ppm"
+Texture "mitra_inlay-kd-tex" "spectrum" "imagemap" "string filename" "assets/crown/texture-mitra_inlay-kd-tex.ppm"
+Texture "mitra_inlay-kd" "spectrum" "scale" "texture tex1" "mitra_inlay-kd-tex" "float tex2" 1.5
+Texture "mitra_inlay-bump" "spectrum" "imagemap" "string filename" "assets/crown/texture-mitra_inlay-bump.ppm"
+Texture "mitra_inlay-bump-sc" "spectrum" "scale" "texture tex1" "mitra_inlay-bump" "float tex2" 0.25
+Texture "mitra_right_back-bump" "spectrum" "imagemap" "string filename" "assets/crown/texture-mitra_right_back-bump.ppm"
+Texture "mitra_right_back-bump-sc" "spectrum" "scale" "texture tex1" "mitra_right_back-bump" "float tex2" 0.25
+Texture "mitra_right_back-roughness-tex" "spectrum" "imagemap" "string filename" "assets/crown/texture-mitra_right_back-roughness-tex.ppm"
+Texture "mitra_right_back-roughness" "spectrum" "scale" "texture tex1" "mitra_right_back-roughness-tex" "float tex2" 0.1
+Texture "rosetta-deco-mask" "spectrum" "imagemap" "string filename" "assets/crown/texture-rosetta-deco-mask.ppm"
+Texture "sapphire-bump" "spectrum" "imagemap" "string filename" "assets/crown/texture-sapphire-bump.ppm"
+Texture "sapphire-bump-sc" "spectrum" "scale" "texture tex1" "sapphire-bump" "float tex2" 0.25
+Texture "upt-roughness-mitra_right_back" "spectrum" "imagemap" "string filename" "assets/crown/texture-upt-roughness-mitra_right_back.ppm"
+Texture "bl_clamp_a" "spectrum" "imagemap" "string filename" "assets/crown/texture-bl_clamp_a.ppm"
+Texture "rosetta_deco_deco_mask.png" "spectrum" "imagemap" "string filename" "assets/crown/texture-rosetta_deco_deco_mask.png.ppm"
+Texture "upt-roughness-border_bott_inlay" "spectrum" "imagemap" "string filename" "assets/crown/texture-upt-roughness-border_bott_inlay.ppm"
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [5.702774 -13.539273 -76.185936 -14.945709 -13.791711 -75.26613 -14.886804 13.04458 -66.57877 5.761684 13.297014 -67.49859]
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [51.922253 14.548275 -16.682684 55.68687 14.548271 -2.696177 50.984279 28.926506 -1.430422 47.219663 28.926506 -15.416933]
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-55.318276 14.650443 -2.989656 -51.449226 14.65044 -16.947636 -46.709482 29.012154 -15.633818 -50.578536 29.012156 -1.675834]
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [20.38967 -4.332172 17.202255 13.206003 -4.332175 23.926588 15.053431 5.620016 25.900215 22.237099 5.620017 19.17588]
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [-18.349361 -3.757668 23.42476 -24.791203 -3.75767 15.977483 -26.581875 6.287214 17.5264 -20.140032 6.287215 24.973679]
+AreaLightSource "diffuse" "rgb L" [5 4.55 4.05]
+Shape "trianglemesh" "integer indices" [0 1 2 0 2 3] "point3 P" [9.260806 19.171276 24.593668 -9.12361 19.171274 25.294205 -9.666298 32.1588 11.052294 8.718122 32.1588 10.351759]
+Material "diffuse" "rgb reflectance" [.2 .2 .2]
+Shape "sphere" "float radius" 100
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "texture roughness" "upt-roughness-mitra_right_back" "texture displacement" "mitra_right_back-bump-sc"
+Shape "plymesh" "string filename" "assets/crown/mesh-0.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0 "texture displacement" "mitra_right_back-bump-sc"
+Shape "plymesh" "string filename" "assets/crown/mesh-1.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-2.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-3.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-4.ply"
+Material "coateddiffuse" "rgb reflectance" [0.65 0.6 0.6]
+Shape "plymesh" "string filename" "assets/crown/mesh-5.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-6.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-7.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-8.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-9.ply"
+Material "dielectric" "float eta" 3.4 "rgb transmittance" [1 1 1]
+Shape "plymesh" "string filename" "assets/crown/mesh-10.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-11.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-12.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-13.ply"
+Material "dielectric" "float eta" 3.4 "rgb transmittance" [1 1 1]
+Shape "plymesh" "string filename" "assets/crown/mesh-14.ply"
+Material "conductor" "texture reflectance" "bl_clamp_a" "float roughness" .04
+Shape "plymesh" "string filename" "assets/crown/mesh-15.ply"
+Material "dielectric" "float eta" 2.5 "rgb transmittance" [1 1 1]
+Shape "plymesh" "string filename" "assets/crown/mesh-16.ply"
+Material "dielectric" "float eta" 3 "rgb transmittance" [0.99004983 0.81873075 0.60653066]
+Shape "plymesh" "string filename" "assets/crown/mesh-17.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0.31940508
+Shape "plymesh" "string filename" "assets/crown/mesh-18.ply"
+Material "dielectric" "float eta" 3.4 "rgb transmittance" [1 1 1]
+Shape "plymesh" "string filename" "assets/crown/mesh-19.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-20.ply"
+Material "diffuse" "rgb reflectance" [0.45 0.45 0.4]
+Shape "plymesh" "string filename" "assets/crown/mesh-21.ply"
+Material "diffuse" "rgb reflectance" [0.45 0.45 0.4]
+Shape "plymesh" "string filename" "assets/crown/mesh-22.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-23.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-24.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-25.ply"
+Material "conductor" "texture reflectance" "rosetta_deco_deco_mask.png" "float roughness" .04
+Shape "plymesh" "string filename" "assets/crown/mesh-26.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-27.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-28.ply"
+Material "coateddiffuse" "texture reflectance" "mitra_inlay-kd" "texture displacement" "mitra_inlay-bump-sc"
+Shape "plymesh" "string filename" "assets/crown/mesh-29.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-30.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-31.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "texture roughness" "upt-roughness-border_bott_inlay"
+Shape "plymesh" "string filename" "assets/crown/mesh-32.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-33.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-34.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-35.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-36.ply"
+Material "coateddiffuse" "texture reflectance" "arc_rosetta_red-kd"
+Shape "plymesh" "string filename" "assets/crown/mesh-37.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-38.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-39.ply"
+Material "conductor" "rgb reflectance" [1 0.766 0.336] "float roughness" 0
+Shape "plymesh" "string filename" "assets/crown/mesh-40.ply"
+Material "dielectric" "float eta" 3 "rgb transmittance" [0.60653066 0.81873075 0.99004983]
+Shape "plymesh" "string filename" "assets/crown/mesh-41.ply"
+Material "coateddiffuse" "rgb reflectance" [0.8 0.8 0.8]
+Shape "plymesh" "string filename" "assets/crown/mesh-42.ply"
+Material "diffuse" "rgb reflectance" [0.8 0.8 0.8]
+Shape "plymesh" "string filename" "assets/crown/mesh-43.ply"
+Material "coateddiffuse" "rgb reflectance" [0.15 0.0015 0.0015]
+Shape "plymesh" "string filename" "assets/crown/mesh-44.ply"
+Material "coateddiffuse" "rgb reflectance" [0.15 0.0015 0.0015]
+Shape "plymesh" "string filename" "assets/crown/mesh-45.ply"

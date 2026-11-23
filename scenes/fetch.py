@@ -2,12 +2,17 @@
 """Fetch pinned benchmark meshes and convert the underwater assets."""
 import hashlib
 from pathlib import Path
+import sys
 import tarfile
 import tempfile
 from urllib.request import urlretrieve
 
 assets = Path(__file__).resolve().parent / "assets"
 assets.mkdir(exist_ok=True)
+if sys.argv[1:] == ["crown"]:
+    from fetch_crown import fetch_crown
+    fetch_crown(assets)
+    raise SystemExit
 for archive, member, name, expected in [
     ("bunny.tar.gz", "bunny/reconstruction/bun_zipper.ply", "bunny.ply", "b1acc63bece78444aa2e15bdcc72371a201279b98c6f5d4b74c993d02f0566fe"),
     ("dragon/dragon_recon.tar.gz", "dragon_recon/dragon_vrip.ply", "dragon.ply", "fea87ff48f2aba22fb53e7b67c3ff3f7b8c2a3b3a0653af62c48bba67c6d5744"),
