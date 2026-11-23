@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 add_executable(upt
     upt.c
     render.c
+    work.c
     shapes.c
     bvh.c
     surfaces.c
@@ -26,6 +27,7 @@ if(UPT_LTO AND CMAKE_C_COMPILER_ID MATCHES "Clang")
     set_property(TARGET upt APPEND_STRING PROPERTY LINK_FLAGS " -flto=full")
 endif()
 if(UPT_WITH_GUI)
+    target_sources(upt PRIVATE display.c)
     target_compile_definitions(upt PRIVATE UPT_WITH_GUI)
     target_link_libraries(upt libuvideomem)
 endif()

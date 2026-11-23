@@ -1,14 +1,10 @@
 #include "upt/render.h"
 #include "upt/trace.h"
-#include "uvideomem/uvideomem.h"
+#include "upt/work.h"
 #include <inttypes.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
-#include <unistd.h>
 
 static double monotonic_seconds(void)
 {
@@ -41,15 +37,12 @@ typedef struct RenderTask {
 	float3 *mean;
 	unsigned width, height;
 	unsigned long long frame;
-	atomic_uint next;
-	atomic_bool stopped;
-	bool *ready;
-	pthread_mutex_t mutex;
-	pthread_cond_t condition;
+	bool (*present)(uint32_t const *, unsigned, unsigned long long);
 } RenderTask;
 
-static void render_row(RenderTask *task, unsigned y)
+static bool render_row(void *context, unsigned y)
 {
+	RenderTask *task = context;
 	Scene *scene = task->scene;
 	uint32_t *vmem = task->pixels;
 	float3 *mean = task->mean;
@@ -73,134 +66,40 @@ static void render_row(RenderTask *task, unsigned y)
 		    float3_add(mean[pixel], float3_scale(float3_sub(rayclr, mean[pixel]), weight));
 		vmem[pixel] = display_pixel(mean[pixel]);
 	}
+	return !task->present || task->present(vmem + (size_t)y * width, y, frame);
 }
 
-static void *render_worker(void *context)
+__attribute__((noinline)) double
+Render(Scene *scene, uint32_t *vmem, unsigned width, unsigned height, unsigned long long nframes,
+       unsigned warmup, unsigned threads,
+       bool (*present)(uint32_t const *, unsigned, unsigned long long))
 {
-	RenderTask *task = context;
-	while (!atomic_load(&task->stopped)) {
-		unsigned y = atomic_fetch_add(&task->next, 1);
-		if (y >= task->height)
-			break;
-		render_row(task, y);
-		if (task->ready) {
-			pthread_mutex_lock(&task->mutex);
-			task->ready[y] = true;
-			pthread_cond_signal(&task->condition);
-			pthread_mutex_unlock(&task->mutex);
-		}
-	}
-	return NULL;
-}
-
-__attribute__((noinline)) static double render(Scene *scene, uint32_t *vmem, unsigned width,
-					       unsigned height, unsigned long long nframes,
-					       unsigned warmup, unsigned threads)
-{
-	if (!threads) {
-		long online = sysconf(_SC_NPROCESSORS_ONLN);
-		threads = online > 0 ? online : 1;
-	}
-	if (threads > height)
-		threads = height;
 	float ratio = (float)width / height;
 	scene->camera.axis_x = float3_scale(scene->camera.axis_x, ratio / scene->camera.ratio);
 	scene->camera.ratio = ratio;
+	scene->camera.spread =
+	    sqrtf(float3_dot(scene->camera.axis_y, scene->camera.axis_y)) / height;
 	float3 *mean = xcalloc((size_t)width * height, sizeof(*mean));
 	RenderTask task = {.scene = scene,
 			   .pixels = vmem,
 			   .mean = mean,
 			   .width = width,
 			   .height = height,
-			   .mutex = PTHREAD_MUTEX_INITIALIZER,
-			   .condition = PTHREAD_COND_INITIALIZER};
-	atomic_init(&task.next, 0);
-	atomic_init(&task.stopped, false);
-	pthread_t *workers = threads > 1 ? xmalloc(threads * sizeof(*workers)) : NULL;
-#ifdef UPT_WITH_GUI
-	if (!nframes && threads > 1)
-		task.ready = xcalloc(height, sizeof(*task.ready));
-#endif
-	double start = 0, elapsed;
-	scene->camera.spread =
-	    sqrtf(float3_dot(scene->camera.axis_y, scene->camera.axis_y)) / height;
+			   .present = present};
+	Workers *workers = WorkersInit(threads, height);
+	double start = 0;
 	for (unsigned long long frame = 0; !nframes || frame < nframes + warmup; ++frame) {
 		if (frame == warmup)
 			start = monotonic_seconds();
 		task.frame = frame;
-		if (threads == 1) {
-			for (unsigned y = 0; y < height; ++y) {
-				render_row(&task, y);
-#ifdef UPT_WITH_GUI
-				if (!nframes &&
-				    !uvideomem_present(vmem + (size_t)y * width, y, frame))
-					goto done;
-#endif
-			}
-			continue;
-		}
-		atomic_store(&task.next, 0);
-		if (task.ready)
-			memset(task.ready, 0, height * sizeof(*task.ready));
-		for (unsigned i = 0; i < threads; ++i) {
-			int error = pthread_create(&workers[i], NULL, render_worker, &task);
-			if (error) {
-				fprintf(stderr, "pthread_create: %s\n", strerror(error));
-				exit(EXIT_FAILURE);
-			}
-		}
-#ifdef UPT_WITH_GUI
-		if (!nframes) {
-			for (unsigned y = 0; y < height; ++y) {
-				pthread_mutex_lock(&task.mutex);
-				while (!task.ready[y])
-					pthread_cond_wait(&task.condition, &task.mutex);
-				pthread_mutex_unlock(&task.mutex);
-				if (!uvideomem_present(vmem + (size_t)y * width, y, frame)) {
-					atomic_store(&task.stopped, true);
-					break;
-				}
-			}
-		}
-#endif
-		for (unsigned i = 0; i < threads; ++i)
-			pthread_join(workers[i], NULL);
-		if (atomic_load(&task.stopped))
+		if (!WorkersRun(workers, height, render_row, &task))
 			break;
 	}
-#ifdef UPT_WITH_GUI
-done:
-#endif
-	elapsed = monotonic_seconds() - start;
-	pthread_cond_destroy(&task.condition);
-	pthread_mutex_destroy(&task.mutex);
-	free(task.ready);
-	free(workers);
+	double elapsed = monotonic_seconds() - start;
+	WorkersFree(workers);
 	free(mean);
 	return elapsed;
 }
-
-#ifdef UPT_WITH_GUI
-typedef struct GuiRender {
-	Scene *scene;
-	unsigned threads;
-} GuiRender;
-
-static void render_gui(void *context, unsigned int width, unsigned int height)
-{
-	GuiRender *task = context;
-	Scene *scene = task->scene;
-	uint32_t *pixels = xcalloc((size_t)width * height, sizeof(*pixels));
-	render(scene, pixels, width, height, 0, 0, task->threads);
-	free(pixels);
-}
-
-int RenderGui(Scene *scene, unsigned threads)
-{
-	GuiRender task = {.scene = scene, .threads = threads};
-	return uvideomem_init(render_gui, &task);
-}
-#endif
 
 static bool write_image(char const *path, uint32_t const *pixels, unsigned width, unsigned height)
 {
@@ -227,7 +126,7 @@ int RenderHeadless(Scene *scene, unsigned width, unsigned height, unsigned long 
 		   unsigned warmup, unsigned threads, char const *output)
 {
 	uint32_t *pixels = xcalloc((size_t)width * height, sizeof(*pixels));
-	double elapsed = render(scene, pixels, width, height, frames, warmup, threads);
+	double elapsed = Render(scene, pixels, width, height, frames, warmup, threads, NULL);
 	int result = EXIT_FAILURE;
 	if (output && !write_image(output, pixels, width, height))
 		goto done;

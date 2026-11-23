@@ -7,10 +7,10 @@
 #include <QThread>
 #include <QTimer>
 #include <QWindow>
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstring>
-#include <vector>
 
 #include "upt/float3.h"
 #include "uvideomem.h"
@@ -24,7 +24,7 @@ static inline void denoise_row(uint32_t const *pixels, unsigned int width, unsig
 {
 	for (unsigned int x = 0; x < width; ++x) {
 		float3 center = float3_frompixel(pixels[(size_t)y * width + x]);
-		float3 sum = {0};
+		float3 sum = {};
 		float total = 0;
 		for (int dy = -1; dy <= 1; ++dy) {
 			int iy = (int)y + dy;
@@ -51,44 +51,27 @@ static inline void denoise_row(uint32_t const *pixels, unsigned int width, unsig
 struct Video {
 	QImage image;
 	QImage filtered;
-	std::vector<uint32_t> filtered_row;
 	QMutex mutex;
 	std::atomic<bool> stopped{false};
-	bool dirty = false;
 	bool denoise = true;
-	unsigned int row = 0;
+	unsigned int first = 0, last = 0, completed = 0;
 	unsigned long long frame = 0;
 };
 Video *video;
-
-void filter_row(unsigned int y)
-{
-	denoise_row(reinterpret_cast<uint32_t const *>(video->image.constBits()),
-		    video->image.width(), video->image.height(), y, video->filtered_row.data());
-	QMutexLocker lock(&video->mutex);
-	std::memcpy(video->filtered.scanLine(y), video->filtered_row.data(),
-		    video->image.width() * sizeof(uint32_t));
-}
 } // namespace
 
 extern "C" bool uvideomem_present(uint32_t const *row, unsigned int y, unsigned long long frame)
 {
-	if (video->stopped.load())
+	if (video->stopped.load(std::memory_order_relaxed))
 		return false;
-	{
-		QMutexLocker lock(&video->mutex);
-		std::memcpy(video->image.scanLine(y), row, video->image.width() * sizeof(*row));
-		video->row = y;
-		video->frame = frame;
-	}
-	if (y > 0)
-		filter_row(y - 1);
-	if (y + 1 == (unsigned int)video->image.height())
-		filter_row(y);
-	{
-		QMutexLocker lock(&video->mutex);
-		video->dirty = true;
-	}
+	QMutexLocker lock(&video->mutex);
+	std::memcpy(video->image.scanLine(y), row, video->image.width() * sizeof(*row));
+	video->first = std::min(video->first, y);
+	video->last = std::max(video->last, y + 1);
+	if (video->frame != frame)
+		video->completed = 0;
+	video->frame = frame;
+	++video->completed;
 	return true;
 }
 
@@ -103,7 +86,7 @@ extern "C" int uvideomem_init(void (*render)(void *, unsigned int, unsigned int)
 	Video state;
 	state.image = QImage(pixels, QImage::Format_RGBX8888);
 	state.filtered = QImage(pixels, QImage::Format_RGBX8888);
-	state.filtered_row.resize(pixels.width());
+	state.first = pixels.height();
 	if (state.image.isNull() || state.filtered.isNull()) {
 		std::fprintf(stderr, "Cannot allocate GUI framebuffer.\n");
 		return 1;
@@ -132,36 +115,49 @@ extern "C" int uvideomem_init(void (*render)(void *, unsigned int, unsigned int)
 	QObject::connect(&denoise, &QShortcut::activated, [&] {
 		QMutexLocker lock(&state.mutex);
 		state.denoise = !state.denoise;
-		state.dirty = true;
+		state.first = 0;
+		state.last = pixels.height();
 	});
 	QObject::connect(&app, &QApplication::aboutToQuit, [&] { state.stopped.store(true); });
 	QTimer timer;
 	QObject::connect(&timer, &QTimer::timeout, [&] {
 		QImage snapshot;
-		unsigned int row;
+		unsigned int first, last, completed;
 		unsigned long long frame;
 		{
 			QMutexLocker lock(&state.mutex);
-			if (!state.dirty)
+			if (state.first == (unsigned)pixels.height())
 				return;
-			snapshot = (state.denoise ? state.filtered : state.image).copy();
-			row = state.row;
+			snapshot = state.image.copy();
+			first = state.first;
+			last = state.last;
+			completed = state.completed;
 			frame = state.frame;
-			state.dirty = false;
+			state.first = pixels.height();
+			state.last = 0;
 		}
-		window.setPixmap(QPixmap::fromImage(snapshot));
+		if (state.denoise) {
+			first = first ? first - 1 : 0;
+			last = std::min(last + 1, (unsigned)pixels.height());
+			for (unsigned y = first; y < last; ++y)
+				denoise_row(
+				    reinterpret_cast<uint32_t const *>(snapshot.constBits()),
+				    pixels.width(), pixels.height(), y,
+				    reinterpret_cast<uint32_t *>(state.filtered.scanLine(y)));
+		}
+		window.setPixmap(QPixmap::fromImage(state.denoise ? state.filtered : snapshot));
 		status.setText(
 		    QString("%1 × %2  |  Pass %3: %4%  |  %5 completed samples/pixel  |  Denoise "
 			    "%6 (D)  |  Esc to close")
 			.arg(pixels.width())
 			.arg(pixels.height())
 			.arg(frame + 1)
-			.arg(100 * (row + 1) / pixels.height())
-			.arg(frame * 8 + (row + 1 == (unsigned int)pixels.height() ? 8 : 0))
+			.arg(100 * completed / pixels.height())
+			.arg(frame * 8 + (completed == (unsigned int)pixels.height() ? 8 : 0))
 			.arg(state.denoise ? "on" : "off"));
 		status.adjustSize();
 	});
-	timer.start(1000 / 30);
+	timer.start(100);
 	std::fprintf(stderr, "GUI: %s, %d x %d pixels, indefinite rendering; Esc to close.\n",
 		     screen->name().toLocal8Bit().constData(), pixels.width(), pixels.height());
 	auto worker = QThread::create([&] { render(context, pixels.width(), pixels.height()); });
