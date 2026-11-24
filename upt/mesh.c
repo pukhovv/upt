@@ -22,17 +22,16 @@ bool MeshTriangleBounds(Mesh const *this, size_t triangle, Aabb *bounds)
 MeshRay MeshRayPrepare(Ray const *ray)
 {
 	float d[3] = {ray->d.x, ray->d.y, ray->d.z};
+	float o[3] = {ray->o.x, ray->o.y, ray->o.z};
 	int kz = fabsf(d[0]) > fabsf(d[1]) ? 0 : 1;
 	if (fabsf(d[2]) > fabsf(d[kz]))
 		kz = 2;
 	int kx = (kz + 1) % 3, ky = (kx + 1) % 3;
-	return (MeshRay){.o = {ray->o.x, ray->o.y, ray->o.z},
+	return (MeshRay){.o = {o[kx], o[ky], o[kz]},
 			 .sx = (double)d[kx] / d[kz],
 			 .sy = (double)d[ky] / d[kz],
 			 .dz = d[kz],
-			 .kx = kx,
-			 .ky = ky,
-			 .kz = kz};
+			 .axes = {kx, ky, kz}};
 }
 
 static bool triangle_intersect(Mesh const *this, size_t triangle, MeshRay const *ray, float tmin,
@@ -40,13 +39,25 @@ static bool triangle_intersect(Mesh const *this, size_t triangle, MeshRay const 
 {
 	// Keep symmetric edge products and double precision at shared edges.
 	double x[3], y[3], z[3];
+#ifdef __AVX__
+	typedef float Coordinates __attribute__((vector_size(16)));
+	typedef int Axes __attribute__((vector_size(16)));
+	Axes axes;
+	memcpy(&axes, ray->axes, sizeof(axes));
+#endif
 	for (int i = 0; i < 3; ++i) {
 		float3 p = this->p[this->indices[triangle][i]];
-		double q[3] = {(double)p.x - ray->o[0], (double)p.y - ray->o[1],
-			       (double)p.z - ray->o[2]};
-		x[i] = q[ray->kx] - ray->sx * q[ray->kz];
-		y[i] = q[ray->ky] - ray->sy * q[ray->kz];
-		z[i] = q[ray->kz] / ray->dz;
+#ifdef __AVX__
+		Coordinates q = __builtin_ia32_vpermilvarps((Coordinates){p.x, p.y, p.z, 0}, axes);
+		float px = q[0], py = q[1], pz = q[2];
+#else
+		float q[3] = {p.x, p.y, p.z};
+		float px = q[ray->axes[0]], py = q[ray->axes[1]], pz = q[ray->axes[2]];
+#endif
+		double dz = (double)pz - ray->o[2];
+		x[i] = ((double)px - ray->o[0]) - ray->sx * dz;
+		y[i] = ((double)py - ray->o[1]) - ray->sy * dz;
+		z[i] = dz / ray->dz;
 	}
 	double a = x[1] * y[2] - y[1] * x[2];
 	double b = x[2] * y[0] - y[2] * x[0];

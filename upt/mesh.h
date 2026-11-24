@@ -14,7 +14,7 @@ typedef struct Mesh {
 
 typedef struct MeshRay {
 	double o[3], sx, sy, dz;
-	int kx, ky, kz;
+	int axes[4];
 } MeshRay;
 
 typedef struct TriangleHit {
