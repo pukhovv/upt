@@ -236,7 +236,8 @@ static BsdfEval ggx_eval(Ggx const *this, HitRecord const *hit, float3 wi, float
 	float ch = fmaxf(0, float3_dot(hit->sn, h)), wh = fabsf(float3_dot(wo, h));
 	float d = ggx_d(ch, a);
 	float pdf = wh > 0 ? d * ch / (4 * wh) : 0;
-	float t = powf(1 - wh, 5);
+	float x = 1 - wh, x2 = x * x;
+	float t = x2 * x2 * x;
 	float3 c = albedo(&this->base, hit, this->color);
 	float3 f = float3_add(c, float3_scale(float3_sub((float3){1, 1, 1}, c), t));
 	return (BsdfEval){float3_scale(f, d * ggx_g(ci, a) * ggx_g(co, a) / (4 * ci * co)), pdf};

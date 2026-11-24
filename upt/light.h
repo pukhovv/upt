@@ -7,6 +7,7 @@ typedef struct Light {
 	Material *material;
 	Transform transform, inverse;
 	double *cdf;
+	struct LightTriangle *triangles;
 	double area;
 } Light;
 

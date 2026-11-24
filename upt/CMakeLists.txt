@@ -22,6 +22,7 @@ add_executable(upt
 target_include_directories(upt PUBLIC "${PROJECT_SOURCE_DIR}")
 find_package(Threads REQUIRED)
 target_link_libraries(upt m Threads::Threads)
+target_compile_options(upt PRIVATE -fno-math-errno)
 if(UPT_LTO AND CMAKE_C_COMPILER_ID MATCHES "Clang")
     target_compile_options(upt PRIVATE -flto=full)
     set_property(TARGET upt APPEND_STRING PROPERTY LINK_FLAGS " -flto=full")

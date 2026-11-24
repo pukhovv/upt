@@ -1,25 +1,49 @@
 #include "upt/bvh.h"
 #include "upt/mesh.h"
 #include "upt/shapes.h"
+#include "upt/surfaces.h"
+#include "upt/transform.h"
 #include <float.h>
 #include <limits.h>
 #include <string.h>
 
 typedef float Slabs __attribute__((vector_size(16)));
 typedef int SlabMask __attribute__((vector_size(16)));
+#ifdef __AVX__
+typedef float ChildBox __attribute__((vector_size(32)));
+typedef int ChildMask __attribute__((vector_size(32)));
+enum { CHILDREN = 8, LEVELS = 3 };
+#else
+typedef Slabs ChildBox;
+typedef SlabMask ChildMask;
+enum { CHILDREN = 4, LEVELS = 2 };
+#endif
 
 // Past SPLIT_DEPTH, binary splits halve the range and bound the traversal stack.
 enum { SHAPE_LEAF_SIZE = 4, MESH_LEAF_SIZE = 2, LEAF_BITS = 3, LEAF_MASK = (1 << LEAF_BITS) - 1,
        SPLIT_DEPTH = 32,
-       TRAVERSAL_DEPTH = 2 * (SPLIT_DEPTH + CHAR_BIT * sizeof(size_t)) };
+       TRAVERSAL_DEPTH = LEVELS * (SPLIT_DEPTH + CHAR_BIT * sizeof(size_t)) };
 
 typedef struct WideNode {
-	_Alignas(64) Slabs bounds[2][3];
-	size_t child[4];
+	_Alignas(64) ChildBox bounds[2][3];
+	size_t child[CHILDREN];
 } WideNode;
 
+typedef struct MeshPart {
+	Shape *object;
+	Mesh *mesh;
+} MeshPart;
+
+typedef struct TriangleRef {
+	MeshPart const *part;
+	size_t index;
+} TriangleRef;
+
 typedef struct Entry {
-	Shape *shape;
+	union {
+		Shape *shape;
+		MeshPart const *part;
+	};
 	Aabb bounds;
 	size_t index;
 } Entry;
@@ -31,6 +55,12 @@ typedef struct Bvh {
 	Aabb bounds;
 	size_t count, finite, root;
 	Mesh *mesh;
+	MeshPart *parts;
+	TriangleRef *triangles;
+	Shape **visit;
+	size_t nvisit;
+	Shape *batch;
+	Instance *instance;
 } Bvh;
 
 static float center(Aabb const *box, int axis)
@@ -64,12 +94,17 @@ static void bin_add(Bin *bin, Aabb const *box, size_t count)
 	bin->count += count;
 }
 
+static double box_area(Aabb const *box)
+{
+	double x = (double)box->corners[1][0] - box->corners[0][0];
+	double y = (double)box->corners[1][1] - box->corners[0][1];
+	double z = (double)box->corners[1][2] - box->corners[0][2];
+	return x * y + y * z + z * x;
+}
+
 static double bin_cost(Bin const *bin)
 {
-	double x = (double)bin->bounds.corners[1][0] - bin->bounds.corners[0][0];
-	double y = (double)bin->bounds.corners[1][1] - bin->bounds.corners[0][1];
-	double z = (double)bin->bounds.corners[1][2] - bin->bounds.corners[0][2];
-	return (x * y + y * z + z * x) * bin->count;
+	return box_area(&bin->bounds) * bin->count;
 }
 
 static int bin_index(Aabb const *box, int axis, float lo, double scale)
@@ -158,7 +193,7 @@ static size_t split(Bvh *bvh, size_t begin, size_t end, unsigned depth, Range co
 		return begin + (end - begin) / 2;
 	float const *lo = range->lo, *hi = range->hi;
 	Entry *entries = bvh->entries;
-	size_t mid = bvh->mesh ? surface_split(entries, begin, end, lo, hi) : begin;
+	size_t mid = (bvh->mesh || bvh->parts) ? surface_split(entries, begin, end, lo, hi) : begin;
 	if (mid != begin)
 		return mid;
 	int axis = 0;
@@ -176,6 +211,21 @@ static size_t split(Bvh *bvh, size_t begin, size_t end, unsigned depth, Range co
 	return mid == begin || mid == end ? begin + (end - begin) / 2 : mid;
 }
 
+static void subdivide(Bvh *bvh, size_t begin, size_t end, Range const *range, unsigned depth,
+		      unsigned levels, size_t leaf_size, size_t endpoints[CHILDREN + 1], unsigned *count)
+{
+	if (!levels || end - begin <= leaf_size) {
+		endpoints[(*count)++] = end;
+		return;
+	}
+	size_t mid = split(bvh, begin, end, depth, range);
+	for (size_t lo = begin, hi = mid; lo < end; lo = hi, hi = end) {
+		Range child = describe(bvh->entries, lo, hi);
+		subdivide(bvh, lo, hi, &child, depth + 1, levels - 1, leaf_size, endpoints,
+			  count);
+	}
+}
+
 static size_t build(Bvh *bvh, size_t begin, size_t end, Range const *range, unsigned depth,
 		    size_t leaf_size, size_t *nnodes)
 {
@@ -183,16 +233,9 @@ static size_t build(Bvh *bvh, size_t begin, size_t end, Range const *range, unsi
 		return (begin << LEAF_BITS) | (end - begin);
 	size_t index = (*nnodes)++;
 	WideNode *node = &bvh->nodes[index];
-	size_t mid = split(bvh, begin, end, depth, range);
-	size_t endpoints[5] = {begin};
+	size_t endpoints[CHILDREN + 1] = {begin};
 	unsigned count = 1;
-	for (size_t i = begin, stop = mid; i < end; i = stop, stop = end) {
-		if (stop - i > leaf_size) {
-			Range child = describe(bvh->entries, i, stop);
-			endpoints[count++] = split(bvh, i, stop, depth + 1, &child);
-		}
-		endpoints[count++] = stop;
-	}
+	subdivide(bvh, begin, end, range, depth, LEVELS, leaf_size, endpoints, &count);
 	unsigned lane = 0;
 	for (; lane + 1 < count; ++lane) {
 		size_t lo = endpoints[lane], hi = endpoints[lane + 1];
@@ -200,9 +243,9 @@ static size_t build(Bvh *bvh, size_t begin, size_t end, Range const *range, unsi
 		for (int c = 0; c < 2; ++c)
 			for (int a = 0; a < 3; ++a)
 				node->bounds[c][a][lane] = child.bounds.corners[c][a];
-		node->child[lane] = build(bvh, lo, hi, &child, depth + 2, leaf_size, nnodes);
+		node->child[lane] = build(bvh, lo, hi, &child, depth + LEVELS, leaf_size, nnodes);
 	}
-	for (; lane < 4; ++lane) {
+	for (; lane < CHILDREN; ++lane) {
 		for (int a = 0; a < 3; ++a) {
 			node->bounds[0][a][lane] = INFINITY;
 			node->bounds[1][a][lane] = -INFINITY;
@@ -215,7 +258,7 @@ static size_t build(Bvh *bvh, size_t begin, size_t end, Range const *range, unsi
 static void build_tree(Bvh *bvh)
 {
 	size_t count = bvh->finite, nnodes = 0;
-	size_t leaf_size = bvh->mesh ? MESH_LEAF_SIZE : SHAPE_LEAF_SIZE;
+	size_t leaf_size = (bvh->mesh || bvh->parts) ? MESH_LEAF_SIZE : SHAPE_LEAF_SIZE;
 	Range range = describe(bvh->entries, 0, count);
 	bvh->bounds = range.bounds;
 	if (count > leaf_size) {
@@ -260,22 +303,30 @@ static bool bounds_hit(Aabb const *box, Slabs origin, Slabs inv, SlabMask sign,
 	return !(enter > leave);
 }
 
-static unsigned children_hit(WideNode const *node, Slabs origin, Slabs inv,
-			     SlabMask sign, float tmin, float tmax, Slabs *distance)
+static inline ChildBox choose_child(ChildMask mask, ChildBox a, ChildBox b)
 {
-	Slabs enter = {tmin, tmin, tmin, tmin}, leave = {tmax, tmax, tmax, tmax};
+	return (ChildBox)(((ChildMask)a & mask) | ((ChildMask)b & ~mask));
+}
+
+static unsigned children_hit(WideNode const *node, Slabs origin, Slabs inv,
+			     Slabs far_inv, SlabMask sign, float tmin, float tmax, ChildBox *distance)
+{
+	ChildBox enter = (ChildBox){0} + tmin, leave = (ChildBox){0} + tmax;
 	for (int a = 0; a < 3; ++a) {
 		unsigned corner = sign[a] & 1;
-		Slabs near = (node->bounds[corner][a] - origin[a]) * inv[a];
-		Slabs far = (node->bounds[1 - corner][a] - origin[a]) * inv[a];
-		far *= 1.0f + 4.0f * FLT_EPSILON;
-		enter = select_slabs(near > enter, near, enter);
-		leave = select_slabs(far < leave, far, leave);
+		ChildBox near = (node->bounds[corner][a] - origin[a]) * inv[a];
+		ChildBox far = (node->bounds[1 - corner][a] - origin[a]) * far_inv[a];
+		if (tmin < 0)
+			far *= 1.0f + 4.0f * FLT_EPSILON;
+		enter = choose_child(near > enter, near, enter);
+		leave = choose_child(far < leave, far, leave);
 	}
 	*distance = enter;
-	SlabMask mask = ~(enter > leave);
-#ifdef __SSE__
-	return __builtin_ia32_movmskps((Slabs)mask);
+	ChildMask mask = ~(enter > leave);
+	#if defined(__AVX__)
+	return __builtin_ia32_movmskps256((ChildBox)mask);
+#elif defined(__SSE__)
+	return __builtin_ia32_movmskps((ChildBox)mask);
 #else
 	return (mask[0] & 1) | (mask[1] & 2) | (mask[2] & 4) | (mask[3] & 8);
 #endif
@@ -298,14 +349,17 @@ __attribute__((always_inline)) static inline bool traverse(Shape *shape, HitReco
 {
 	Bvh *bvh = (Bvh *)shape;
 	Mesh *mesh = bvh->mesh;
+	bool triangles = mesh || bvh->parts;
+	MeshPart const *owner = NULL;
 	Slabs origin = {hit->ray.o.x, hit->ray.o.y, hit->ray.o.z, 0};
 	Slabs inv = 1.0f / (Slabs){hit->ray.d.x, hit->ray.d.y, hit->ray.d.z, 1};
 	SlabMask sign = (SlabMask)inv < 0;
+	Slabs far_inv = tmin < 0 ? inv : inv * (1.0f + 6.0f * FLT_EPSILON);
 	bool in_tree = bvh->finite && bounds_hit(&bvh->bounds, origin, inv, sign, tmin, tmax);
 	HitRecord candidate;
 	MeshRay ray;
 	TriangleHit nearest = {0};
-	if (mesh) {
+	if (triangles) {
 		if (!in_tree)
 			return false;
 		ray = MeshRayPrepare(&hit->ray);
@@ -318,8 +372,8 @@ __attribute__((always_inline)) static inline bool traverse(Shape *shape, HitReco
 		size_t n = ref >> LEAF_BITS, count = ref & LEAF_MASK;
 		if (!count) {
 			WideNode const *node = &bvh->nodes[n];
-			Slabs distance;
-			unsigned bits = children_hit(node, origin, inv, sign, tmin, tmax, &distance);
+			ChildBox distance;
+			unsigned bits = children_hit(node, origin, inv, far_inv, sign, tmin, tmax, &distance);
 			if (bits && !(bits & (bits - 1))) {
 				size_t child = node->child[__builtin_ctz(bits)];
 				if (child != SIZE_MAX) {
@@ -348,26 +402,31 @@ __attribute__((always_inline)) static inline bool traverse(Shape *shape, HitReco
 			}
 		}
 		for (size_t i = n; i < n + count; ++i) {
-			Entry *entry = &bvh->entries[i];
-			if (!mesh && !bounds_hit(&entry->bounds, origin, inv, sign, tmin, tmax))
-				continue;
-			if (mesh) {
+			if (triangles) {
+				MeshPart const *part = bvh->parts ? bvh->triangles[i].part : NULL;
+				Mesh *geometry = part ? part->mesh : mesh;
+				size_t index = part ? bvh->triangles[i].index : bvh->entries[i].index;
 				if (any) {
-					if (MeshTriangleOccluded(mesh, entry->index, &ray, tmin,
-								 tmax))
+					if (MeshTriangleOccluded(geometry, index, &ray, tmin, tmax))
 						return true;
 				} else {
 					TriangleHit triangle =
-					    MeshTriangleHit(mesh, entry->index, &ray, tmin, tmax);
+					    MeshTriangleHit(geometry, index, &ray, tmin, tmax);
+					bool first = part != owner ? !owner || part < owner : index < closest;
 					if (triangle.valid &&
-					    (triangle.t < tmax ||
-					     (triangle.t == tmax && entry->index < closest))) {
+					    (triangle.t < tmax || (triangle.t == tmax && first))) {
 						nearest = triangle;
 						tmax = triangle.t;
-						closest = entry->index;
+						closest = index;
+						owner = part;
 					}
 				}
-			} else if (any) {
+				continue;
+			}
+			Entry const *entry = &bvh->entries[i];
+			if (!bounds_hit(&entry->bounds, origin, inv, sign, tmin, tmax))
+				continue;
+			if (any) {
 				if (ShapeOccluded(entry->shape, &hit->ray, tmin, tmax))
 					return true;
 			} else
@@ -384,11 +443,15 @@ __attribute__((always_inline)) static inline bool traverse(Shape *shape, HitReco
 		} else
 			intersect(&bvh->entries[i], &candidate, hit, &closest, tmin, &tmax);
 	}
-	if (mesh && closest != SIZE_MAX) {
+	if (triangles && closest != SIZE_MAX) {
 		hit->t = nearest.t;
 		hit->u = nearest.u;
 		hit->v = nearest.v;
 		hit->primitive = closest;
+		if (owner) {
+			MeshComplete(owner->mesh, hit);
+			hit->object = owner->object;
+		}
 	}
 	return closest != SIZE_MAX;
 }
@@ -433,7 +496,13 @@ Shape *BvhBuild(Shape *const *shapes, size_t count)
 void BvhFree(Shape *shape)
 {
 	Bvh *bvh = (Bvh *)shape;
+	if (bvh->batch)
+		BvhFree(bvh->batch);
+	free(bvh->instance);
+	free(bvh->visit);
 	free(bvh->nodes);
+	free(bvh->triangles);
+	free(bvh->parts);
 	free(bvh->entries);
 	free(bvh);
 }
@@ -469,7 +538,134 @@ bool BvhVisit(Shape *shape, void (*visit)(Shape *, void *), void *context)
 	if (shape->Hit != BvhHit)
 		return false;
 	Bvh *this = (Bvh *)shape;
-	for (size_t i = 0; i < this->count; ++i)
-		visit(this->entries[i].shape, context);
+	if (this->mesh || this->parts)
+		return false;
+	if (this->visit) {
+		for (size_t i = 0; i < this->nvisit; ++i)
+			visit(this->visit[i], context);
+	} else {
+		for (size_t i = 0; i < this->count; ++i)
+			visit(this->entries[i].shape, context);
+	}
 	return true;
+}
+
+static bool batch_hit(Shape *shape, HitRecord *hit, float tmin, float tmax)
+{
+	Instance *this = (Instance *)shape;
+	HitRecord local = *hit;
+	local.ray.o = TransformPoint(this->inverse, hit->ray.o);
+	local.ray.d = TransformVector(this->inverse, hit->ray.d);
+	if (!BvhHit(this->child, &local, tmin, tmax))
+		return false;
+	InstanceComplete(this, hit, &local);
+	return true;
+}
+
+static Mesh *static_mesh(Shape *shape)
+{
+	if (shape->Hit == InstanceHit)
+		shape = ((Instance *)shape)->child;
+	if (shape->Hit != MeshHit)
+		return NULL;
+	Mesh *mesh = (Mesh *)shape;
+	return mesh->material && mesh->material->Apply != LampApply && mesh->ntriangles
+		   ? mesh
+		   : NULL;
+}
+
+Shape *BvhBuildScene(Shape *const *shapes, size_t count)
+{
+	enum { MIN_PARTS = 4, MIN_TRIANGLES = 4096 };
+	Shape *source = BvhBuild(shapes, count);
+	if (count < MIN_PARTS)
+		return source;
+	size_t first = 0, largest = 0;
+	for (size_t i = 0; i < count; ++i) {
+		Mesh *mesh = static_mesh(shapes[i]);
+		if (mesh && mesh->ntriangles > largest) {
+			first = i;
+			largest = mesh->ntriangles;
+		}
+	}
+	if (!largest)
+		return source;
+	bool transformed = shapes[first]->Hit == InstanceHit;
+	Instance *instance = transformed ? (Instance *)shapes[first] : NULL;
+	Mesh **parts = xcalloc(count, sizeof(*parts));
+	size_t nparts = 0, triangles = 0;
+	Bin group = {0};
+	double area = 0;
+	for (size_t i = 0; i < count; ++i) {
+		Mesh *mesh = static_mesh(shapes[i]);
+		if (!mesh || shapes[i]->Hit != shapes[first]->Hit ||
+		    (instance && memcmp(&((Instance *)shapes[i])->transform, &instance->transform,
+					sizeof(instance->transform))))
+			continue;
+		if (mesh->ntriangles > SIZE_MAX - triangles) {
+			free(parts);
+			return source;
+		}
+		Aabb bounds;
+		if (!MeshBounds(&mesh->base, &bounds))
+			continue;
+		parts[i] = mesh;
+		++nparts;
+		triangles += mesh->ntriangles;
+		area += box_area(&bounds);
+		bin_add(&group, &bounds, 1);
+	}
+	// Separate bounds already cull well when meshes occupy different regions.
+	if (nparts < MIN_PARTS || triangles < MIN_TRIANGLES ||
+	    !(area > 1.5 * box_area(&group.bounds))) {
+		free(parts);
+		return source;
+	}
+	Bvh *flat = xcalloc(1, sizeof(*flat));
+	flat->base = (Shape){.Hit = BvhHit, .Bounds = BvhBounds, .Occluded = BvhOccluded};
+	flat->parts = xcalloc(nparts, sizeof(*flat->parts));
+	flat->finite = flat->count = triangles;
+	flat->entries = xcalloc(triangles, sizeof(*flat->entries));
+	Shape **remaining = xcalloc(count - nparts + 1, sizeof(*remaining));
+	size_t n = 0, j = 0, k = 0;
+	for (size_t i = 0; i < count; ++i) {
+		Mesh *mesh = parts[i];
+		if (!mesh) {
+			remaining[n++] = shapes[i];
+			continue;
+		}
+		MeshPart *part = &flat->parts[k++];
+		*part = (MeshPart){shapes[i], mesh};
+		for (size_t t = 0; t < mesh->ntriangles; ++t) {
+			Entry *entry = &flat->entries[j++];
+			*entry = (Entry){.part = part, .index = t};
+			MeshTriangleBounds(mesh, t, &entry->bounds);
+		}
+	}
+	free(parts);
+	build_tree(flat);
+	flat->triangles = xcalloc(triangles, sizeof(*flat->triangles));
+	for (size_t i = 0; i < triangles; ++i)
+		flat->triangles[i] = (TriangleRef){flat->entries[i].part, flat->entries[i].index};
+	free(flat->entries);
+	flat->entries = NULL;
+	Instance *wrapper = NULL;
+	if (instance) {
+		wrapper = InstanceCreate(&flat->base, instance->transform);
+		wrapper->base.Hit = batch_hit;
+	}
+	remaining[n++] = wrapper ? &wrapper->base : &flat->base;
+	Bvh *scene = (Bvh *)BvhBuild(remaining, n);
+	free(remaining);
+	scene->batch = &flat->base;
+	scene->instance = wrapper;
+
+	// Keep emitter enumeration in the same order as the unbatched BVH.
+	Bvh *original = (Bvh *)source;
+	scene->visit = xcalloc(count, sizeof(*scene->visit));
+	scene->nvisit = count;
+	for (size_t i = 0; i < count; ++i)
+		scene->visit[i] = original->entries[i].shape;
+	BvhFree(source);
+	return &scene->base;
 }

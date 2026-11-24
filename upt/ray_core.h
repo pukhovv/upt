@@ -24,17 +24,31 @@ static inline float3 RayAt(Ray const r, float t)
 	return float3_add(r.o, float3_scale(r.d, t));
 }
 
+static inline float advance_float(float value, float delta)
+{
+	union { float f; uint32_t bits; } x = {value}, direction = {delta};
+	uint32_t sign = UINT32_C(0x80000000);
+	uint32_t magnitude = x.bits & ~sign;
+	if (!magnitude)
+		x.bits = (direction.bits & sign) | 1;
+	else if (magnitude < UINT32_C(0x7f800000))
+		x.bits += ((x.bits ^ direction.bits) & sign) ? -1u : 1u;
+	else
+		return nextafterf(value, delta > 0 ? INFINITY : -INFINITY);
+	return x.f;
+}
+
 static inline Ray RaySpawn(float3 point, float3 normal, float3 direction)
 {
 	float side = float3_dot(normal, direction) >= 0 ? 1 : -1;
 	float3 offset = float3_scale(normal, side * 0.0001f);
 	float3 origin = float3_add(point, offset);
 	if (offset.x)
-		origin.x = nextafterf(origin.x, offset.x > 0 ? INFINITY : -INFINITY);
+		origin.x = advance_float(origin.x, offset.x);
 	if (offset.y)
-		origin.y = nextafterf(origin.y, offset.y > 0 ? INFINITY : -INFINITY);
+		origin.y = advance_float(origin.y, offset.y);
 	if (offset.z)
-		origin.z = nextafterf(origin.z, offset.z > 0 ? INFINITY : -INFINITY);
+		origin.z = advance_float(origin.z, offset.z);
 	return (Ray){.o = origin, .d = direction};
 }
 

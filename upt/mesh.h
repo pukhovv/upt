@@ -13,7 +13,7 @@ typedef struct Mesh {
 } Mesh;
 
 typedef struct MeshRay {
-	double o[3], sx, sy, dz;
+	double o[3], sx, sy, inv_z;
 	int axes[4];
 } MeshRay;
 
@@ -27,6 +27,7 @@ Mesh *MeshCreate(float3 *p, float3 *n, float (*uv)[2], uint32_t (*indices)[3], s
 Mesh *MeshReadPly(char const *path, Material *material);
 void MeshFree(void *mesh);
 bool MeshHit(Shape *shape, HitRecord *hit, float tmin, float tmax);
+void MeshComplete(Mesh *mesh, HitRecord *hit);
 bool MeshBounds(Shape *shape, Aabb *bounds);
 MeshRay MeshRayPrepare(Ray const *ray);
 TriangleHit MeshTriangleHit(Mesh const *mesh, size_t triangle, MeshRay const *ray, float tmin,

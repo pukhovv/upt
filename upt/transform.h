@@ -62,6 +62,7 @@ bool MovingInstanceBounds(Shape *shape, Aabb *bounds);
 
 Instance *InstanceCreate(Shape *child, Transform transform);
 bool InstanceHit(Shape *shape, HitRecord *hit, float tmin, float tmax);
+void InstanceComplete(Instance const *instance, HitRecord *hit, HitRecord *local);
 bool InstanceBounds(Shape *shape, Aabb *bounds);
 
 bool InstanceOccluded(Shape *shape, Ray const *ray, float tmin, float tmax);

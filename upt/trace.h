@@ -120,9 +120,8 @@ static inline float3 SceneTrace(Scene *scene, Ray current)
 		LightSample light;
 		if (!glass && hit.material->Apply != MirrorApply &&
 		    hit.material->Apply != LampApply && LightSampleOne(scene, point, &light)) {
-			BsdfEval f = hit.material->Eval(hit.material, &hit, light.direction);
 			float cosine = fmaxf(0, float3_dot(hit.sn, light.direction));
-			if (cosine > 0 && float3_dot(f.f, f.f) > 0 &&
+			if (cosine > 0 &&
 			    float3_dot(light.direction, hit.gn) * float3_dot(hit.ray.d, hit.gn) <
 				0) {
 				Ray shadow = RaySpawn(point, hit.gn, light.direction);
@@ -135,17 +134,20 @@ static inline float3 SceneTrace(Scene *scene, Ray current)
 					blocked = ShapeOccluded(scene->shapes[i], &shadow, 0,
 								length - .0002f);
 				if (!blocked) {
-					float scale =
-					    cosine * MisWeight(light.pdf, f.pdf) / light.pdf;
-					float3 value = float3_mul(
-					    f.f, float3_mul(
-						     light.radiance,
-						     float3_mul(medium_attenuation(medium, length),
-								VolumeTransmittance(
-								    nmedia ? NULL : scene->volume,
-								    shadow, length))));
-					radiance = float3_add(
-					    radiance, float3_scale(float3_mul(beta, value), scale));
+					BsdfEval f = hit.material->Eval(hit.material, &hit, light.direction);
+					if (float3_dot(f.f, f.f) > 0) {
+						float scale =
+						    cosine * MisWeight(light.pdf, f.pdf) / light.pdf;
+						float3 value = float3_mul(
+						    f.f, float3_mul(
+							     light.radiance,
+							     float3_mul(medium_attenuation(medium, length),
+									VolumeTransmittance(
+									    nmedia ? NULL : scene->volume,
+									    shadow, length))));
+						radiance = float3_add(
+						    radiance, float3_scale(float3_mul(beta, value), scale));
+					}
 				}
 			}
 		}

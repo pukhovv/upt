@@ -52,13 +52,18 @@ bool InstanceHit(Shape *shape, HitRecord *hit, float tmin, float tmax)
 	if (!ShapeHit(this->child, &local, tmin, tmax))
 		return false;
 	local.object = shape;
-	local.ray = hit->ray;
-	local.sn = normal(this->inverse, local.sn);
-	local.gn = normal(this->inverse, local.gn);
-	local.dpdu = TransformVector(this->transform, local.dpdu);
-	local.dpdv = TransformVector(this->transform, local.dpdv);
-	*hit = local;
+	InstanceComplete(this, hit, &local);
 	return true;
+}
+
+void InstanceComplete(Instance const *this, HitRecord *hit, HitRecord *local)
+{
+	local->ray = hit->ray;
+	local->sn = normal(this->inverse, local->sn);
+	local->gn = normal(this->inverse, local->gn);
+	local->dpdu = TransformVector(this->transform, local->dpdu);
+	local->dpdv = TransformVector(this->transform, local->dpdv);
+	*hit = *local;
 }
 
 bool InstanceBounds(Shape *shape, Aabb *bounds)

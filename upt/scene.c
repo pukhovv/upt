@@ -609,7 +609,7 @@ Scene SceneRead(char const *path)
 	fclose(p.file);
 	// PBRT's raster y grows downward; CameraLookAt uses the supplied up as axis_y.
 	CameraLookAt(&scene.camera, eye, at, float3_scale(up, -1));
-	Shape *root = BvhBuild(scene.shapes, scene.nshapes);
+	Shape *root = BvhBuildScene(scene.shapes, scene.nshapes);
 	free(scene.shapes);
 	scene.shapes = xmalloc(sizeof(*scene.shapes));
 	scene.shapes[0] = root;

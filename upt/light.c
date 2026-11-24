@@ -19,6 +19,10 @@ typedef struct Collect {
 	bool moving;
 } Collect;
 
+typedef struct LightTriangle {
+	float3 p[3], n;
+} LightTriangle;
+
 static float3 vertex(Light const *light, size_t triangle, int v)
 {
 	Mesh *mesh = (Mesh *)light->leaf;
@@ -68,12 +72,24 @@ static void collect(Shape *shape, void *context)
 	if (shape->Hit == MeshHit) {
 		Mesh *mesh = (Mesh *)shape;
 		light->cdf = xmalloc(mesh->ntriangles * sizeof(double));
+		light->triangles = xcalloc(mesh->ntriangles, sizeof(*light->triangles));
+		bool reflected = float3_dot(light->transform.x,
+					    float3_cross(light->transform.y, light->transform.z)) < 0;
 		for (size_t i = 0; i < mesh->ntriangles; ++i) {
-			float3 e1 = float3_sub(vertex(light, i, 1), vertex(light, i, 0));
-			float3 e2 = float3_sub(vertex(light, i, 2), vertex(light, i, 0));
+			LightTriangle *triangle = &light->triangles[i];
+			for (int j = 0; j < 3; ++j)
+				triangle->p[j] = vertex(light, i, j);
+			float3 e1 = float3_sub(triangle->p[1], triangle->p[0]);
+			float3 e2 = float3_sub(triangle->p[2], triangle->p[0]);
 			float3 n = float3_cross(e1, e2);
-			light->area += .5f * sqrtf(float3_dot(n, n));
+			float length = sqrtf(float3_dot(n, n));
+			light->area += .5f * length;
 			light->cdf[i] = light->area;
+			if (length > 0) {
+				triangle->n = float3_scale(n, 1 / length);
+				if (reflected)
+					triangle->n = float3_scale(triangle->n, -1);
+			}
 		}
 	}
 }
@@ -87,8 +103,10 @@ void LightsBuild(Scene *scene)
 
 void LightsFree(Scene *scene)
 {
-	for (size_t i = 0; i < scene->nlights; ++i)
+	for (size_t i = 0; i < scene->nlights; ++i) {
 		free(scene->lights[i].cdf);
+		free(scene->lights[i].triangles);
+	}
 	free(scene->lights);
 }
 
@@ -135,14 +153,12 @@ bool LightSampleOne(Scene const *scene, float3 point, LightSample *sample)
 				hi = mid;
 		}
 		float r = sqrtf(rand_uniform()), v = rand_uniform();
-		float3 a = vertex(light, lo, 0), b = vertex(light, lo, 1), c = vertex(light, lo, 2);
-		p = float3_add(float3_scale(a, 1 - r),
-			       float3_add(float3_scale(b, r * (1 - v)), float3_scale(c, r * v)));
-		n = float3_norm(float3_cross(float3_sub(b, a), float3_sub(c, a)));
+		LightTriangle const *triangle = &light->triangles[lo];
+		p = float3_add(float3_scale(triangle->p[0], 1 - r),
+			       float3_add(float3_scale(triangle->p[1], r * (1 - v)),
+					  float3_scale(triangle->p[2], r * v)));
+		n = triangle->n;
 		area = light->area;
-		if (float3_dot(light->transform.x,
-			       float3_cross(light->transform.y, light->transform.z)) < 0)
-			n = float3_scale(n, -1);
 	} else {
 		Sphere *sphere = (Sphere *)light->leaf;
 		float z = 1 - 2 * rand_uniform(), phi = 2 * M_PI * rand_uniform(),

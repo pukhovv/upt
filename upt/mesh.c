@@ -30,7 +30,7 @@ MeshRay MeshRayPrepare(Ray const *ray)
 	return (MeshRay){.o = {o[kx], o[ky], o[kz]},
 			 .sx = (double)d[kx] / d[kz],
 			 .sy = (double)d[ky] / d[kz],
-			 .dz = d[kz],
+			 .inv_z = 1.0 / d[kz],
 			 .axes = {kx, ky, kz}};
 }
 
@@ -57,7 +57,7 @@ static bool triangle_intersect(Mesh const *this, size_t triangle, MeshRay const 
 		double dz = (double)pz - ray->o[2];
 		x[i] = ((double)px - ray->o[0]) - ray->sx * dz;
 		y[i] = ((double)py - ray->o[1]) - ray->sy * dz;
-		z[i] = dz / ray->dz;
+		z[i] = dz * ray->inv_z;
 	}
 	double a = x[1] * y[2] - y[1] * x[2];
 	double b = x[2] * y[0] - y[2] * x[0];
@@ -67,11 +67,12 @@ static bool triangle_intersect(Mesh const *this, size_t triangle, MeshRay const 
 	double det = a + b + c;
 	if (det == 0)
 		return false;
-	double t = (a * z[0] + b * z[1] + c * z[2]) / det;
+	double inv_det = 1.0 / det;
+	double t = (a * z[0] + b * z[1] + c * z[2]) * inv_det;
 	if (!(t >= tmin && t <= tmax))
 		return false;
 	if (hit)
-		*hit = (TriangleHit){.t = t, .u = b / det, .v = c / det};
+		*hit = (TriangleHit){.t = t, .u = b * inv_det, .v = c * inv_det};
 	return true;
 }
 
@@ -94,6 +95,12 @@ bool MeshHit(Shape *shape, HitRecord *hit, float tmin, float tmax)
 	Mesh *this = (Mesh *)shape;
 	if (!this->tree->Hit(this->tree, hit, tmin, tmax))
 		return false;
+	MeshComplete(this, hit);
+	return true;
+}
+
+void MeshComplete(Mesh *this, HitRecord *hit)
+{
 	uint32_t const *v = this->indices[hit->primitive];
 	float3 e1 = float3_sub(this->p[v[1]], this->p[v[0]]);
 	float3 e2 = float3_sub(this->p[v[2]], this->p[v[0]]);
@@ -128,9 +135,8 @@ bool MeshHit(Shape *shape, HitRecord *hit, float tmin, float tmax)
 		hit->v =
 		    a * this->uv[v[0]][1] + u * this->uv[v[1]][1] + vweight * this->uv[v[2]][1];
 	}
-	hit->object = hit->leaf = shape;
+	hit->object = hit->leaf = &this->base;
 	hit->material = this->material;
-	return true;
 }
 
 bool MeshBounds(Shape *shape, Aabb *bounds)
